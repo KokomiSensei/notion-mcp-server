@@ -408,4 +408,62 @@ register({
   },
 });
 
+const GetPageMarkdownParams = z.object({
+  page_id: z.string(),
+});
+
+register({
+  name: "get_page_markdown",
+  description: "Return a page's body as Notion-rendered markdown. Server-side conversion; round-trips with update_page_markdown.",
+  batchable: true,
+  schema: GetPageMarkdownParams,
+  example: { page_id: "<page-id>" },
+  handler: async ({ page_id }) => {
+    try {
+      const notion = await getClient();
+      const response = await notion.pages.retrieveMarkdown({ page_id });
+      return {
+        ok: true,
+        data: { page_id, markdown: (response as { markdown?: string }).markdown ?? "" },
+      };
+    } catch (error) {
+      return { ok: false, error: toErrorEnvelope(error) };
+    }
+  },
+});
+
+const UpdatePageMarkdownParams = z.object({
+  page_id: z.string(),
+  markdown: z.string().describe("New page content as Notion-flavored markdown. Replaces existing body unless insert_content is set."),
+  insert_content: z
+    .object({
+      position: z.enum(["start", "end"]).describe("Insert at start or end instead of replacing."),
+    })
+    .optional(),
+});
+
+register({
+  name: "update_page_markdown",
+  description: "Replace (or insert into) a page's body using Notion's server-side markdown renderer. Skip the local remark pipeline.",
+  batchable: true,
+  schema: UpdatePageMarkdownParams,
+  example: {
+    page_id: "<page-id>",
+    markdown: "## Updated heading\n\nNew body.",
+  },
+  handler: async ({ page_id, markdown, insert_content }) => {
+    try {
+      const notion = await getClient();
+      const response = await notion.pages.updateMarkdown({
+        page_id,
+        markdown,
+        ...(insert_content ? { insert_content } : {}),
+      } as never);
+      return { ok: true, data: { page_id: (response as { id?: string }).id ?? page_id } };
+    } catch (error) {
+      return { ok: false, error: toErrorEnvelope(error) };
+    }
+  },
+});
+
 void RICH_TEXT_ITEM_REQUEST_SCHEMA;

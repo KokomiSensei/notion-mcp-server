@@ -6,9 +6,9 @@ beforeAll(async () => {
 });
 
 describe("operations registry", () => {
-  it("registers every name in the OperationName union (27 total)", () => {
+  it("registers every name in the OperationName union (29 total)", () => {
     const names = operationNames();
-    expect(names.length).toBe(27);
+    expect(names.length).toBe(29);
   });
 
   it("includes the data-source ops", () => {
@@ -19,6 +19,11 @@ describe("operations registry", () => {
 
   it("includes move_page", () => {
     expect(getOperation("move_page")).toBeDefined();
+  });
+
+  it("includes the page markdown ops", () => {
+    expect(getOperation("get_page_markdown")).toBeDefined();
+    expect(getOperation("update_page_markdown")).toBeDefined();
   });
 
   it("includes the v2 gap-closure ops added on top of v1 capabilities", () => {
