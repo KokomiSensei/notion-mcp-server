@@ -22,7 +22,7 @@ const EXECUTE_INPUT = {
       "Operation name. See notion_describe for the schema of any operation, or read the notion://operations resource for the full menu. Common ops: set_page_title, append_blocks, get_page, search_pages, query_database."
     ),
   payload: z
-    .unknown()
+    .record(z.string(), z.unknown())
     .describe(
       "Operation parameters. Pass either single-op fields directly, or { items: [...], atomic?, idempotency_key?, concurrency? } for batch."
     ),
