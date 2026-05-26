@@ -35,7 +35,7 @@
 
 ## 🚀 Quick start
 
-> **Already running notion-mcp-server v1.1.x?** If your `NOTION_TOKEN` is set and tools work today, **nothing changes for you in v1.2.0**. The setup paths below are recommendations for new installs and for users hitting per-page sharing pain.
+> **Already running notion-mcp-server v1.x?** If your `NOTION_TOKEN` is set and tools work today, **nothing changes for you in v1.4.0** — the version ships internal upgrades only (Docker image in v1.3.0, Zod 4 migration in v1.4.0). The setup paths below are recommendations for new installs and for users hitting per-page sharing pain.
 
 ### Option 1 — Personal Access Token (recommended)
 

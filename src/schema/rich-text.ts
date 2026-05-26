@@ -19,7 +19,7 @@ export const TEXT_CONTENT_REQUEST_SCHEMA = z
     content: z.string().describe("The actual text content"),
     link: z
       .object({
-        url: z.string().url().describe("URL for the link"),
+        url: z.url().describe("URL for the link"),
       })
       .optional()
       .nullable()

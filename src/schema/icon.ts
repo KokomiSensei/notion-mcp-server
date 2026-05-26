@@ -7,7 +7,7 @@ export const ICON_SCHEMA = z.object({
     .refine(
       (value) => /(\p{Emoji}\uFE0F|\p{Emoji_Presentation})/gu.test(value),
       {
-        message: "Invalid emoji",
+        error: "Invalid emoji",
       }
     )
     .transform((value) => value as EmojiRequest),

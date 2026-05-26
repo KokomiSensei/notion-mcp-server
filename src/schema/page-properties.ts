@@ -16,7 +16,7 @@ export const DATE_PROPERTY_VALUE_SCHEMA = z.object({
 });
 
 export const EMAIL_PROPERTY_VALUE_SCHEMA = z.object({
-  email: z.string().email(),
+  email: z.email(),
 });
 
 export const FILES_PROPERTY_VALUE_SCHEMA = z.object({
@@ -24,7 +24,7 @@ export const FILES_PROPERTY_VALUE_SCHEMA = z.object({
     z.object({
       name: z.string(),
       external: z.object({
-        url: z.string().url(),
+        url: z.url(),
       }),
     })
   ),
@@ -81,5 +81,5 @@ export const TITLE_PROPERTY_VALUE_SCHEMA = z.object({
 });
 
 export const URL_PROPERTY_VALUE_SCHEMA = z.object({
-  url: z.string().url(),
+  url: z.url(),
 });

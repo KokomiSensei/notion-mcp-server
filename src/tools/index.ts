@@ -10,15 +10,7 @@ import { registerDatabaseOperationTool } from "./database.js";
 import { registerCommentsOperationTool } from "./comments.js";
 import { registerUsersOperationTool } from "./users.js";
 
-// Each server.registerTool call below is suppressed with @ts-expect-error TS2589
-// because the project's schemas (ZodEffects<ZodDiscriminatedUnion<...>>) exceed
-// TypeScript's type-instantiation depth limit when fed through registerTool's
-// inputSchema/ToolCallback generic chain. The suppression is site-local and the
-// SDK's real signature is preserved — extra, outputSchema, _meta, and the
-// RegisteredTool return value all remain accessible to future code.
-
 export const registerAllTools = () => {
-  // @ts-expect-error TS2589 — ZodEffects<ZodDiscriminatedUnion<...>> exceeds TS instantiation depth
   server.registerTool(
     "notion_pages",
     {
@@ -36,7 +28,6 @@ export const registerAllTools = () => {
     registerPagesOperationTool
   );
 
-  // @ts-expect-error TS2589 — ZodEffects<ZodDiscriminatedUnion<...>> exceeds TS instantiation depth
   server.registerTool(
     "notion_blocks",
     {
@@ -54,7 +45,6 @@ export const registerAllTools = () => {
     registerBlocksOperationTool
   );
 
-  // @ts-expect-error TS2589 — ZodEffects<ZodDiscriminatedUnion<...>> exceeds TS instantiation depth
   server.registerTool(
     "notion_database",
     {
@@ -72,7 +62,6 @@ export const registerAllTools = () => {
     registerDatabaseOperationTool
   );
 
-  // @ts-expect-error TS2589 — ZodEffects<ZodDiscriminatedUnion<...>> exceeds TS instantiation depth
   server.registerTool(
     "notion_comments",
     {
@@ -90,7 +79,6 @@ export const registerAllTools = () => {
     registerCommentsOperationTool
   );
 
-  // @ts-expect-error TS2589 — ZodEffects<ZodDiscriminatedUnion<...>> exceeds TS instantiation depth
   server.registerTool(
     "notion_users",
     {
