@@ -17,10 +17,15 @@ const AppendBlocksParams = z
     block_id: z.string().describe("Parent page ID or block ID to append into."),
     markdown: z.string().optional().describe("Content to append, as markdown. Parsed server-side."),
     children: z.array(z.unknown()).optional().describe("Structured Notion blocks. Mutually exclusive with markdown."),
+    after: z.string().optional().describe("Append immediately after this block ID (legacy ordering)."),
+    position: z.enum(["start", "end"]).optional().describe("Append at start or end. Preferred over `after`."),
     verbose: VERBOSE,
   })
   .refine((v) => Boolean(v.markdown) !== Boolean(v.children), {
     message: "Pass exactly one of `markdown` or `children`.",
+  })
+  .refine((v) => !(v.after && v.position), {
+    message: "Pass at most one of `after` or `position`.",
   });
 
 register({
@@ -38,7 +43,7 @@ register({
       { block_id: "<page-id-2>", markdown: "Body 2" },
     ],
   },
-  handler: async ({ block_id, markdown, children, verbose }) => {
+  handler: async ({ block_id, markdown, children, after, position, verbose }) => {
     try {
       const blocks = markdown ? parseMarkdownToBlocks(markdown) : children!;
       if (blocks.length === 0) {
@@ -54,7 +59,9 @@ register({
       const response = await notion.blocks.children.append({
         block_id,
         children: blocks as never,
-      });
+        ...(after ? { after } : {}),
+        ...(position ? { position } : {}),
+      } as never);
       return {
         ok: true,
         data: {
