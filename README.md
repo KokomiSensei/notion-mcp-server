@@ -151,7 +151,7 @@ Add this entry to your MCP config JSON (`~/.cursor/mcp.json` for Cursor, `~/Libr
 - **Idempotency keys** — same key + same op = cached result. Safe to retry on flaky networks.
 - **Markdown shortcut** — `create_page` / `append_blocks` / `update_block` accept a `markdown` string and convert it to Notion blocks (paragraphs, headings, lists, to-dos, quotes, code, dividers, images, inline annotations, links).
 - **Slim responses by default** — pass `verbose: true` per call to get the raw Notion SDK shape.
-- **23 operations** covering pages, blocks, databases, comments, and users — see `notion://operations`.
+- **32 operations** covering pages, blocks, databases, data sources, comments, and users — see `notion://operations`.
 - **Universal MCP compatibility** — works with Cursor, Claude Desktop, Claude Code, Cline, Zed, etc.
 
 ## 📚 Documentation
@@ -215,15 +215,16 @@ Return the JSON Schema + working example for a single operation. Use this when y
 
 ### Operations menu
 
-Twenty-three operations cover the standard CRUD surface:
+Thirty-two operations cover the standard CRUD surface:
 
-| Area      | Operations |
-| --------- | ---------- |
-| Pages     | `create_page`, `get_page`, `set_page_title`, `set_page_property`, `set_page_properties`, `archive_page`, `restore_page`, `search_pages` |
-| Blocks    | `append_blocks`, `get_block`, `get_block_children`, `update_block`, `delete_block`, `batch_mixed_blocks` |
-| Databases | `create_database`, `query_database`, `update_database` |
-| Comments  | `list_comments`, `add_page_comment`, `add_discussion_comment` |
-| Users     | `list_users`, `get_user`, `get_bot_user` |
+| Area         | Operations |
+| ------------ | ---------- |
+| Pages        | `create_page`, `get_page`, `set_page_title`, `set_page_property`, `set_page_properties`, `archive_page`, `restore_page`, `search_pages`, `move_page`, `get_page_markdown`, `update_page_markdown` |
+| Blocks       | `append_blocks`, `get_block`, `get_block_children`, `update_block`, `delete_block`, `batch_mixed_blocks` |
+| Databases    | `create_database`, `query_database`, `update_database` |
+| Data sources | `list_data_sources`, `get_data_source`, `update_data_source` |
+| Comments     | `list_comments`, `add_page_comment`, `add_discussion_comment`, `get_comment`, `update_comment`, `delete_comment` |
+| Users        | `list_users`, `get_user`, `get_bot_user` |
 
 The authoritative list (with batchability) is also served as an MCP resource at `notion://operations` — useful as a one-shot cheat sheet for the LLM.
 
