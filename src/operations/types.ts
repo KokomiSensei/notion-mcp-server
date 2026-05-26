@@ -9,6 +9,7 @@ export type OperationName =
   | "restore_page"
   | "search_pages"
   | "get_page"
+  | "move_page"
   | "append_blocks"
   | "get_block"
   | "get_block_children"

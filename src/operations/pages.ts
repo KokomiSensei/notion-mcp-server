@@ -373,4 +373,39 @@ register({
   },
 });
 
+const MovePageParams = z.object({
+  page_id: z.string(),
+  new_parent: PARENT_SCHEMA.describe("New parent (page_id, database_id, data_source_id, block_id, or workspace)."),
+  verbose: VERBOSE,
+});
+
+register({
+  name: "move_page",
+  description: "Move a page to a new parent without recreating it. Preserves the page's blocks, properties, and comments.",
+  batchable: true,
+  schema: MovePageParams,
+  example: {
+    page_id: "<page-id>",
+    new_parent: { type: "page_id", page_id: "<new-parent-id>" },
+  },
+  exampleBatch: {
+    items: [
+      { page_id: "<p1>", new_parent: { type: "page_id", page_id: "<dest>" } },
+      { page_id: "<p2>", new_parent: { type: "page_id", page_id: "<dest>" } },
+    ],
+  },
+  handler: async ({ page_id, new_parent, verbose }) => {
+    try {
+      const notion = await getClient();
+      const response = await notion.pages.move({
+        page_id,
+        new_parent: new_parent as never,
+      } as never);
+      return { ok: true, data: slimPage(response, verbose ?? false) };
+    } catch (error) {
+      return { ok: false, error: toErrorEnvelope(error) };
+    }
+  },
+});
+
 void RICH_TEXT_ITEM_REQUEST_SCHEMA;
