@@ -1,3 +1,28 @@
+# Upgrading from v2.0 → v2.1
+
+v2.1 is **additive** at the MCP tool layer — the two-tool surface (`notion_execute`, `notion_describe`) is unchanged. The server now talks to `@notionhq/client@5.x` with `Notion-Version: 2025-09-03`, which exposes data sources, new block / property types, and a handful of new endpoints. New operations were added; existing ones still work.
+
+The only semi-breaking call-site change: `query_database` now routes through `dataSources.query`. Single-source databases continue to work transparently when you pass `database_id`. Multi-source databases require `data_source_id` (the server returns a clear self-healing error pointing to `list_data_sources` if you pass a multi-source database_id).
+
+## What's new
+
+1. **API version bump** — server pins `Notion-Version: 2025-09-03`. Slim reads now surface both `archived` and `in_trash` (back-filling whichever the SDK omits) so consumers reading either field continue to work.
+2. **`query_database` accepts `data_source_id`** — pass either `database_id` (auto-resolves single-source databases) or `data_source_id` (required for multi-source). Multi-source ambiguity returns a `multi_source_database` error envelope with the available source IDs.
+3. **New ops** — `move_page`, `get_page_markdown`, `update_page_markdown`, `list_data_sources`, `get_data_source`, `update_data_source`, `get_comment`, `update_comment`, `delete_comment`.
+4. **New parent types** — `data_source_id`, `workspace`, `block_id` are valid `parent` values on `create_page`.
+5. **New block types** — `heading_4`, `tab` accepted in markdown (`####` parses to `heading_4`) and structured input.
+6. **New property types** — `button`, `unique_id`, `verification` available in database schemas. `verification` is writable on pages.
+7. **Markdown comments** — `add_page_comment`, `add_discussion_comment`, and `update_comment` accept `markdown` as an alternative to plain text / rich text.
+8. **`position` param** on `append_blocks` (preferred over legacy `after`).
+
+## Call sites to audit
+
+- [ ] If you call `query_database` against a database that has multiple data sources, switch to `data_source_id` (use `list_data_sources` to discover them).
+- [ ] If you read `archived` from slim responses, no change needed. For forward-compat, prefer `in_trash`.
+- [ ] If you call `add_page_comment` or `add_discussion_comment` with `text`, no change needed. If you'd rather pass formatted bodies, use the new `markdown` field.
+
+---
+
 # Migrating from notion-mcp-server v1.x → v2.0.0
 
 v2 is a **hard cutover**. The five `notion_*` tools are gone; everything now goes through `notion_execute` (do something) and `notion_describe` (learn its schema). If your client code talks to specific tool names, it needs the rename below.
