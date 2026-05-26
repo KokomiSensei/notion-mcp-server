@@ -14,7 +14,3 @@ export async function getClient(): Promise<Client> {
   }
   return cachedClient;
 }
-
-export function getRootPageId(): string | undefined {
-  return process.env.NOTION_PAGE_ID;
-}

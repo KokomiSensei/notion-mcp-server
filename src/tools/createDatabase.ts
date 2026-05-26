@@ -1,5 +1,4 @@
 import { getClient } from "../services/notion.js";
-import { AuthError } from "../services/auth.js";
 import { CreateDatabaseParams } from "../types/database.js";
 import { handleNotionError } from "../utils/error.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -17,7 +16,7 @@ export const createDatabase = async (
         : undefined);
 
     if (!parent) {
-      throw new AuthError(
+      throw new Error(
         "No parent page configured. Either pass `parent` in this request, or set the NOTION_PAGE_ID environment variable to a default Notion page ID. To find a page ID: open the page in Notion → Share → Copy link → the ID is the last 32 chars of the URL."
       );
     }
