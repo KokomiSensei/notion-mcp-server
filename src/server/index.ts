@@ -22,7 +22,7 @@ export async function startServer() {
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.log(
+    console.error(
       `${CONFIG.serverName} v${CONFIG.serverVersion} running on stdio`
     );
   } catch (error) {
