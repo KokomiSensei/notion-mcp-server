@@ -8,7 +8,6 @@ export const server = new McpServer(
   },
   {
     capabilities: {
-      resources: {},
       tools: {},
     },
     instructions: `
