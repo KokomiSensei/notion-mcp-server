@@ -155,7 +155,56 @@ describe("upload_file (single-part)", () => {
     expect(args.part_number).toBeUndefined();
 
     expect((await sendBytes(0)).equals(payload)).toBe(true);
+    // Notion rejects send() when the Blob's MIME doesn't match the
+    // content_type declared at create(); the Blob must echo content_type.
+    const sentBlob = args.file.data;
+    if (typeof sentBlob === "string" || !(sentBlob instanceof Blob)) {
+      throw new Error("Expected file.data to be a Blob");
+    }
+    expect(sentBlob.type).toBe("text/plain");
     expect(notionStub.fileUploads.complete).not.toHaveBeenCalled();
+  });
+
+  it("infers content_type from the filename extension when caller omits it (Notion rejects octet-stream)", async () => {
+    notionStub.fileUploads.create.mockResolvedValue({
+      id: "fu-inferred",
+      status: "pending",
+    });
+    notionStub.fileUploads.send.mockResolvedValue({
+      id: "fu-inferred",
+      status: "uploaded",
+    });
+
+    await dispatch("upload_file", {
+      mode: "single",
+      filename: "anything.txt",
+      source: { kind: "base64", data: Buffer.from("x").toString("base64") },
+    });
+
+    expect(notionStub.fileUploads.create).toHaveBeenCalledWith({
+      mode: "single_part",
+      filename: "anything.txt",
+      content_type: "text/plain",
+    });
+    const blob = sendArgs(0).file.data;
+    if (typeof blob === "string" || !(blob instanceof Blob)) {
+      throw new Error("Expected file.data to be a Blob");
+    }
+    expect(blob.type).toBe("text/plain");
+  });
+
+  it("returns validation_error envelope when content_type is omitted and the extension isn't on the allowlist", async () => {
+    const res = await dispatch("upload_file", {
+      mode: "single",
+      filename: "weird.xyz",
+      source: { kind: "base64", data: Buffer.from("x").toString("base64") },
+    });
+    assertErr(res);
+    expect(res.error.code).toBe("validation_error");
+    expect(res.error.message).toContain("weird.xyz");
+    expect(res.error.fix).toContain("content_type");
+    expect(notionStub.fileUploads.create).not.toHaveBeenCalled();
+    expect(notionStub.fileUploads.send).not.toHaveBeenCalled();
   });
 });
 
@@ -181,14 +230,14 @@ describe("upload_file (multi-part)", () => {
     notionStub.fileUploads.complete.mockResolvedValue({
       id: "fu-multi",
       status: "uploaded",
-      filename: "big.bin",
+      filename: "big.pdf",
       content_length: totalBytes,
     });
 
     const res = await dispatch("upload_file", {
       mode: "multi",
-      filename: "big.bin",
-      content_type: "application/octet-stream",
+      filename: "big.pdf",
+      content_type: "application/pdf",
       source: { kind: "base64", data: payload.toString("base64") },
     });
 
@@ -199,8 +248,8 @@ describe("upload_file (multi-part)", () => {
 
     expect(notionStub.fileUploads.create).toHaveBeenCalledWith({
       mode: "multi_part",
-      filename: "big.bin",
-      content_type: "application/octet-stream",
+      filename: "big.pdf",
+      content_type: "application/pdf",
       number_of_parts: 3,
     });
 
@@ -238,7 +287,7 @@ describe("upload_file (multi-part)", () => {
 
     const res = await dispatch("upload_file", {
       mode: "multi",
-      filename: "big.bin",
+      filename: "big.pdf",
       source: { kind: "base64", data: payload.toString("base64") },
     });
 
@@ -280,12 +329,12 @@ describe("upload_file (URL source)", () => {
     try {
       const res = await dispatch("upload_file", {
         mode: "single",
-        filename: "blob.bin",
-        source: { kind: "url", url: "https://example.com/blob.bin" },
+        filename: "blob.pdf",
+        source: { kind: "url", url: "https://example.com/blob.pdf" },
       });
 
       expect(res).toMatchObject({ ok: true });
-      expect(fetchStub).toHaveBeenCalledWith("https://example.com/blob.bin");
+      expect(fetchStub).toHaveBeenCalledWith("https://example.com/blob.pdf");
       expect((await sendBytes(0)).equals(remoteBytes)).toBe(true);
     } finally {
       vi.unstubAllGlobals();

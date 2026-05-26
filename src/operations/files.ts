@@ -47,6 +47,71 @@ function splitIntoParts(buf: Buffer, partSize = MAX_PART_BYTES): Buffer[] {
   return parts;
 }
 
+// Notion's File Upload API requires the Blob's type on send() to match
+// the content_type stored at create(). It does NOT accept
+// application/octet-stream as a fallback. The allowlist below mirrors the
+// MIME types documented at
+// https://developers.notion.com/docs/working-with-files-and-media — when the
+// caller doesn't pass content_type, infer it from the filename extension so
+// create + send agree.
+const EXTENSION_TO_MIME: Record<string, string> = {
+  // Audio
+  aac: "audio/aac",
+  flac: "audio/x-flac",
+  m4a: "audio/mp4",
+  mid: "audio/midi",
+  midi: "audio/midi",
+  mp3: "audio/mpeg",
+  oga: "audio/ogg",
+  ogg: "audio/ogg",
+  wav: "audio/wav",
+  weba: "audio/webm",
+  wma: "audio/x-ms-wma",
+  // Image
+  apng: "image/apng",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
+  heic: "image/heic",
+  ico: "image/vnd.microsoft.icon",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  webp: "image/webp",
+  // Video
+  "3gp": "video/3gpp",
+  "3g2": "video/3gpp2",
+  amv: "video/x-amv",
+  asf: "video/x-ms-asf",
+  avi: "video/x-msvideo",
+  f4v: "video/x-f4v",
+  flv: "video/x-flv",
+  m4v: "video/mp4",
+  mkv: "video/x-matroska",
+  mov: "video/quicktime",
+  mp4: "video/mp4",
+  mpeg: "video/mpeg",
+  mpg: "video/mpeg",
+  ogv: "video/ogg",
+  qt: "video/quicktime",
+  webm: "video/webm",
+  // Documents
+  csv: "text/csv",
+  json: "application/json",
+  pdf: "application/pdf",
+  txt: "text/plain",
+};
+
+function inferContentType(filename: string): string | undefined {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0 || dot === filename.length - 1) return undefined;
+  const ext = filename.slice(dot + 1).toLowerCase();
+  return EXTENSION_TO_MIME[ext];
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // upload_file
 // ──────────────────────────────────────────────────────────────────────────
@@ -75,17 +140,32 @@ register({
   handler: tryHandler(async ({ mode, filename, content_type, source }) => {
     const notion = await getClient();
     const bytes = await resolveBytes(source);
+    // Notion rejects send() when the Blob's MIME doesn't match the
+    // content_type stored at create(), and rejects application/octet-stream
+    // outright. Resolve a single MIME for both sides: caller's content_type
+    // wins, else infer from the filename extension.
+    const effectiveType = content_type ?? inferContentType(filename);
+    if (!effectiveType) {
+      return {
+        ok: false,
+        error: {
+          code: "validation_error",
+          message: `Could not infer content_type from filename "${filename}". Notion's File Upload API rejects application/octet-stream and only accepts a fixed allowlist of MIME types.`,
+          fix: "Pass `content_type` explicitly (e.g. \"application/pdf\", \"image/png\", \"text/plain\"). See https://developers.notion.com/docs/working-with-files-and-media for the full list.",
+        },
+      };
+    }
 
     if (mode === "single") {
       const createBody: CreateFileUploadBody = {
         mode: "single_part",
         filename,
-        ...(content_type !== undefined ? { content_type } : {}),
+        content_type: effectiveType,
       };
       const created = await notion.fileUploads.create(createBody);
       const sendBody: SendFileUploadBody = {
         file_upload_id: created.id,
-        file: { filename, data: new Blob([bytes]) },
+        file: { filename, data: new Blob([bytes], { type: effectiveType }) },
       };
       const sent = await notion.fileUploads.send(sendBody);
       return { ok: true, data: slimFileUpload(sent) };
@@ -95,7 +175,7 @@ register({
     const createBody: CreateFileUploadBody = {
       mode: "multi_part",
       filename,
-      ...(content_type !== undefined ? { content_type } : {}),
+      content_type: effectiveType,
       number_of_parts: parts.length,
     };
     const created = await notion.fileUploads.create(createBody);
@@ -104,7 +184,7 @@ register({
       const partNumber = index + 1;
       const sendBody: SendFileUploadBody = {
         file_upload_id: created.id,
-        file: { filename, data: new Blob([part]) },
+        file: { filename, data: new Blob([part], { type: effectiveType }) },
         part_number: String(partNumber),
       };
       try {
