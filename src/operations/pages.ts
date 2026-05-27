@@ -182,14 +182,32 @@ register({
 // set_page_property
 // ──────────────────────────────────────────────────────────────────────────
 
-const SetPagePropertyParams = z.object({
-  page_id: z.string(),
-  name: z.string().describe("Property name (case-sensitive). Use `title` for the title property."),
-  value: PROPERTY_VALUE_SCHEMA.describe(
-    "Property value object matching the property type, e.g. {checkbox: true}, {select: {name: 'Open'}}."
-  ),
-  verbose: VERBOSE,
-});
+// For the title property, accept a bare string as a shorthand and wrap it into
+// Notion's rich-text array shape. Avoids forcing the LLM to know the verbose
+// {title:[{type:"text",text:{content}}]} form for the most common case.
+function wrapTitleShorthand(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input;
+  const obj = input as Record<string, unknown>;
+  if (obj.name === "title" && typeof obj.value === "string") {
+    return {
+      ...obj,
+      value: { title: [{ type: "text", text: { content: obj.value } }] },
+    };
+  }
+  return input;
+}
+
+const SetPagePropertyParams = z.preprocess(
+  wrapTitleShorthand,
+  z.object({
+    page_id: z.string(),
+    name: z.string().describe("Property name (case-sensitive). Use `title` for the title property; you may pass value as a plain string in that case."),
+    value: PROPERTY_VALUE_SCHEMA.describe(
+      "Property value object matching the property type, e.g. {checkbox: true}, {select: {name: 'Open'}}. For `name: 'title'` a plain string is accepted as a shorthand."
+    ),
+    verbose: VERBOSE,
+  })
+);
 
 register({
   name: "set_page_property",
@@ -220,15 +238,34 @@ register({
 // set_page_properties (plural)
 // ──────────────────────────────────────────────────────────────────────────
 
-const SetPagePropertiesParams = z.object({
-  page_id: z.string(),
-  properties: z
-    .record(z.string(), PROPERTY_VALUE_SCHEMA)
-    .describe(
-      "Map of property name → value, written in one API call. Use this when updating multiple properties on the same page."
-    ),
-  verbose: VERBOSE,
-});
+function wrapTitleShorthandInProperties(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input;
+  const obj = input as Record<string, unknown>;
+  const props = obj.properties;
+  if (typeof props !== "object" || props === null) return input;
+  const propsObj = props as Record<string, unknown>;
+  if (typeof propsObj.title !== "string") return input;
+  return {
+    ...obj,
+    properties: {
+      ...propsObj,
+      title: { title: [{ type: "text", text: { content: propsObj.title } }] },
+    },
+  };
+}
+
+const SetPagePropertiesParams = z.preprocess(
+  wrapTitleShorthandInProperties,
+  z.object({
+    page_id: z.string(),
+    properties: z
+      .record(z.string(), PROPERTY_VALUE_SCHEMA)
+      .describe(
+        "Map of property name → value, written in one API call. Use this when updating multiple properties on the same page. For the `title` key, a plain string is accepted as a shorthand."
+      ),
+    verbose: VERBOSE,
+  })
+);
 
 register({
   name: "set_page_properties",
@@ -384,18 +421,31 @@ register({
 // get_page
 // ──────────────────────────────────────────────────────────────────────────
 
-const GetPageParams = z.object({ page_id: z.string(), verbose: VERBOSE });
+const GetPageParams = z.object({
+  page_id: z.string(),
+  include_properties: z
+    .boolean()
+    .optional()
+    .describe(
+      "When true, attach the page's properties as a flattened name → value map. Off by default to keep the slim response tight; use `verbose: true` for the raw Notion SDK shape."
+    ),
+  verbose: VERBOSE,
+});
 
 register({
   name: "get_page",
-  description: "Retrieve a page's metadata and properties (no body blocks — use get_block_children for those).",
+  description:
+    "Retrieve a page's metadata and (optionally) properties. No body blocks — use get_block_children for those. Pass `include_properties: true` to also return a flattened properties map.",
   batchable: true,
   schema: GetPageParams,
   example: { page_id: "<page-id>" },
-  handler: tryHandler(async ({ page_id, verbose }) => {
+  handler: tryHandler(async ({ page_id, include_properties, verbose }) => {
     const notion = await getClient();
     const response = await notion.pages.retrieve({ page_id });
-    return { ok: true, data: slimPage(response, verbose ?? false) };
+    return {
+      ok: true,
+      data: slimPage(response, verbose ?? false, include_properties ?? false),
+    };
   }),
 });
 

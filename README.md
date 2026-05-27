@@ -9,7 +9,7 @@
 
 An agent-first **Notion MCP server** (Model Context Protocol) that connects Claude, Cursor, ChatGPT, Claude Desktop, Cline, Zed and other MCP-compatible AI clients to Notion. Sign in once with your Notion **Personal Access Token (PAT)** — no per-page sharing dance, no extra integration to set up. Your AI sees the Notion pages you authorize the token for (typically your whole workspace) and can create pages, query databases, append blocks, leave comments, and upload files in natural language.
 
-> **v2.3 — built for AI agents, not REST clients.** Two MCP tools instead of 36 endpoints, batched mutations, idempotency keys, automatic retries on Notion rate limits, self-healing validation errors, slim token-efficient responses, and a markdown shortcut so the model can write a whole page in one call.
+> **v2.4 — built for AI agents, not REST clients.** Two MCP tools instead of 36 endpoints, batched mutations, idempotency keys, automatic retries on Notion rate limits, self-healing validation errors (now path-sliced to <1KB), slim token-efficient responses, and a markdown shortcut so the model can write a whole page in one call.
 
 <a href="https://glama.ai/mcp/servers/zrh07hteaa">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/zrh07hteaa/badge" alt="Notion MCP Server on Glama" />
@@ -21,6 +21,8 @@ An agent-first **Notion MCP server** (Model Context Protocol) that connects Clau
 - [Why this server? (vs. the official Notion MCP)](#-why-this-server-vs-the-official-notion-mcp)
 - [Developer install](#-developer-install)
   - [Authentication: PAT (recommended) vs. Internal Integration](#authentication-pat-recommended-vs-internal-integration)
+  - [Get a Personal Access Token — full walkthrough](#get-a-personal-access-token--full-walkthrough)
+  - [Backward compatibility from v1.x](#backward-compatibility-from-v1x)
   - [Claude Code / Cursor / Claude Desktop](#claude-code--cursor--claude-desktop)
   - [Docker / Podman / OrbStack](#docker--podman--orbstack)
   - [Optional `NOTION_PAGE_ID`](#optional-notion_page_id)
@@ -64,9 +66,11 @@ A Personal Access Token (PAT) is like a key that lets the AI act as **you** insi
 2. Click your **profile picture** (top-left) → **Settings**.
 3. In the left sidebar, click **My Settings** → **Personal Access Tokens** (depending on Notion's rollout, may appear as "API tokens" or **Connections → Tokens**).
 4. Click **Generate new token**, give it a name like "Claude", click **Generate**.
-5. **Copy** the token. It starts with `ntn_` — keep it safe; treat it like a password.
+5. **Copy** the token — Notion shows the full value **only once**. It starts with `ntn_`. Treat it like a password.
 
-> Don't see a Personal Access Tokens / API tokens entry? Your workspace admin may have disabled them. Skip to [Authentication options](#authentication-pat-recommended-vs-internal-integration) for the Internal Integration alternative.
+> Need more detail (rotation, revocation, what a PAT can/can't do, admin restrictions)? See the [full PAT walkthrough](#get-a-personal-access-token--full-walkthrough) further down.
+>
+> Don't see a Personal Access Tokens / API tokens entry? Your workspace admin may have disabled them — use the [Internal Integration alternative](#authentication-pat-recommended-vs-internal-integration).
 
 ### Step 2 — Tell Claude Desktop where the server lives
 
@@ -159,9 +163,97 @@ The rest of this README assumes PAT. Swap in an integration secret if you prefer
 
 > 💡 **Heads-up:** most "object_not_found" errors are a wrong auth choice, not a bug. If your agent reports "Could not find page" on pages you can see in Notion, you're almost certainly using an Internal Integration token that hasn't been Connected to those pages — switch to a PAT.
 
+### Get a Personal Access Token — full walkthrough
+
+A Personal Access Token (PAT) authenticates as **you** in Notion's API. It inherits your account's page access, never expires until you revoke it, and skips the per-page **Connect** step that Internal Integrations require.
+
+#### 1. Open Notion settings
+
+- **Desktop / web:** click your workspace name or profile picture in the top-left corner → **Settings** (gear icon).
+- **Mobile:** menu → **Settings & members** → **Settings**.
+
+Make sure you're in the workspace you want the token to access. PATs are issued per-account but inherit the workspace context where they were created.
+
+#### 2. Find the tokens panel
+
+In the Settings sidebar, look under your name. The exact label depends on Notion's rollout — any of these:
+
+- **My Settings → Personal Access Tokens**
+- **My Settings → API tokens**
+- **Connections → Tokens** (newer accounts)
+
+If you don't see any of those, the workspace admin may have disabled them — see [Workspace admin disabled PATs?](#workspace-admin-disabled-pats) below.
+
+#### 3. Generate a new token
+
+1. Click **Generate new token** (or **+ New token** on newer UIs).
+2. Give it a recognizable name like `Claude`, `Cursor`, or `MCP Server – home`. The name is only for your records; it doesn't affect behavior.
+3. Click **Generate**.
+
+#### 4. Copy the token immediately
+
+Notion shows the full token **only once**. After you close the dialog, only the first few characters are visible — there's no "show again" button. The token format is `ntn_` followed by a long random string.
+
+If you missed copying it, just revoke the token (step below) and generate a new one. It's quick and harmless.
+
+#### 5. Store it safely
+
+Treat the token like a password:
+
+- **Do** put it in a password manager.
+- **Do** put it in your MCP client's local config file (Claude Desktop's `claude_desktop_config.json`, Cursor's `~/.cursor/mcp.json`, `.env` files that are in `.gitignore`).
+- **Don't** commit it to git, paste it in shared documents, post it in chat, or share it with teammates (issue them their own).
+
+#### 6. What a PAT can and can't do
+
+| Can | Can't |
+| --- | --- |
+| Read every page you have access to | Access workspaces or pages you personally can't see |
+| Create / update pages and databases in workspaces where you have edit rights | Bypass workspace permission rules |
+| Add comments under your identity | Act as another user |
+| Upload files via the File Upload API | Modify workspace-level admin settings |
+
+A PAT is a **scope = your account**. If you lose edit access to a page, the PAT loses edit access too.
+
+#### Rotating or revoking a PAT
+
+To revoke (lost device, compromised token, finished project, security policy):
+
+1. **Notion → Settings → My Settings → Personal Access Tokens** (or wherever you generated it).
+2. Find the token by its name → **• • • → Revoke** (or the trash icon).
+3. Update `NOTION_TOKEN` in your MCP client config with a fresh token, and restart the client.
+
+Tokens have **no default expiry** — they live until you revoke them. Rotate periodically as a hygiene practice.
+
+#### Workspace admin disabled PATs?
+
+Some enterprise workspaces force scoped Internal Integrations instead. Two options:
+
+1. **Ask your admin to enable PATs** for your account.
+2. **Use the [Internal Integration](#authentication-pat-recommended-vs-internal-integration) path** — it works with the same `NOTION_TOKEN` env var; you just generate the secret from Notion → Settings → **Connections** → **Develop or manage integrations** → **New integration**, then click **• • • → Connect** on every page or database you want the agent to touch.
+
+### Backward compatibility from v1.x
+
+If you ran a v1.x setup, **nothing in your environment needs to change**. Both env vars still work:
+
+| Env var | Status in v2.4 | Notes |
+| --- | --- | --- |
+| `NOTION_TOKEN` | ✅ Required | Accepts **PATs** (`ntn_…`, recommended) and **Internal Integration secrets** (`secret_…` or `ntn_…`, legacy). Identical handling. |
+| `NOTION_PAGE_ID` | ✅ Optional | Still works as the default parent page for `create_page` / `create_database` when no `parent` is passed. v2 added a clean `missing_parent` validation error instead of v1's crash when neither is provided. |
+| `NOTION_RATE_LIMIT` | ✅ New, optional | Requests per second for the shared limiter. Defaults to `3` (Notion's documented per-integration limit). |
+| `NOTION_DAILY_LOG_PAGE_ID` | ✅ Optional | Used only by the daily-log MCP prompt. Ignore if you don't call that prompt. |
+
+The only v2 break is the **tool surface itself** — v1's `notion_pages`, `notion_blocks`, `notion_database`, `notion_comments`, `notion_users` are replaced by `notion_execute` and `notion_describe`. Modern MCP clients (Claude Code, Cursor, Claude Desktop) rediscover tools at startup, so they pick up the new surface automatically. If your client hard-codes the v1 tool names, see [MIGRATION.md](./MIGRATION.md) for the rename map.
+
+A typical v1.x invocation continues to work unchanged:
+
+```bash
+NOTION_TOKEN=secret_xxx NOTION_PAGE_ID=abc123... node build/index.js
+```
+
 ### Claude Code / Cursor / Claude Desktop
 
-> ⚠️ **Heads-up while the v2 line stabilizes on npm.** The latest published `notion-mcp-server` on npm is **v1.x**; this repo is **v2.3**. Until v2 is published, the install snippets below pull from GitHub via `npx -y github:awkoy/notion-mcp-server` (npm builds from source on first run). Once v2 is on npm, you can swap that for plain `notion-mcp-server@^2`.
+> ⚠️ **Heads-up while the v2 line stabilizes on npm.** The latest published `notion-mcp-server` on npm is **v1.x**; this repo is **v2.4**. Until v2 is published, the install snippets below pull from GitHub via `npx -y github:awkoy/notion-mcp-server` (npm builds from source on first run). Once v2 is on npm, you can swap that for plain `notion-mcp-server@^2`.
 
 **Claude Code:**
 

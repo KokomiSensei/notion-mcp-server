@@ -15,13 +15,13 @@ const FILE_UPLOAD_STATUS = ["pending", "uploaded", "expired", "failed"] as const
 
 const VERBOSE = z.boolean().optional();
 
-const SourceSchema = z.discriminatedUnion("kind", [
+const SourceSchema = z.discriminatedUnion("type", [
   z.object({
-    kind: z.literal("base64"),
+    type: z.literal("base64"),
     data: z.string().describe("Base64-encoded file bytes."),
   }),
   z.object({
-    kind: z.literal("url"),
+    type: z.literal("url"),
     url: z.url().describe("Public URL to fetch the file bytes from."),
   }),
 ]);
@@ -29,7 +29,7 @@ const SourceSchema = z.discriminatedUnion("kind", [
 type Source = z.infer<typeof SourceSchema>;
 
 async function resolveBytes(source: Source): Promise<Buffer> {
-  if (source.kind === "base64") return Buffer.from(source.data, "base64");
+  if (source.type === "base64") return Buffer.from(source.data, "base64");
   const res = await fetch(source.url);
   if (!res.ok) {
     throw new Error(
@@ -119,7 +119,8 @@ function inferContentType(filename: string): string | undefined {
 const UploadFileParams = z.object({
   mode: z
     .enum(["single", "multi"])
-    .describe("'single' = one create+send call. 'multi' = chunk into 5MB parts then complete."),
+    .optional()
+    .describe("'single' (default) = one create+send call. 'multi' = chunk into 5MB parts then complete."),
   filename: z.string(),
   content_type: z.string().optional(),
   source: SourceSchema,
@@ -128,16 +129,16 @@ const UploadFileParams = z.object({
 register({
   name: "upload_file",
   description:
-    "Upload a file via Notion's file_uploads API. Handles single-part (one create + one send) and multi-part (create + N sends + complete) transparently.\n\nSource shapes:\n  • Base64 bytes: `source: { kind: \"base64\", data: \"<b64 string>\" }`\n  • Public URL:   `source: { kind: \"url\", url: \"https://example.com/file.pdf\" }` (the server fetches it server-side).",
+    "Upload a file via Notion's file_uploads API. Handles single-part (one create + one send) and multi-part (create + N sends + complete) transparently.\n\nSource shapes:\n  • Base64 bytes: `source: { type: \"base64\", data: \"<b64 string>\" }`\n  • Public URL:   `source: { type: \"url\", url: \"https://example.com/file.pdf\" }` (the server fetches it server-side).\n\n`mode` defaults to \"single\"; only pass \"multi\" for files larger than ~5MB.",
   batchable: false,
   schema: UploadFileParams,
   example: {
-    mode: "single",
     filename: "report.pdf",
     content_type: "application/pdf",
-    source: { kind: "base64", data: "JVBERi0xLjQK..." },
+    source: { type: "base64", data: "JVBERi0xLjQK..." },
   },
   handler: tryHandler(async ({ mode, filename, content_type, source }) => {
+    const effectiveMode = mode ?? "single";
     const notion = await getClient();
     const bytes = await resolveBytes(source);
     // Notion rejects send() when the Blob's MIME doesn't match the
@@ -156,7 +157,7 @@ register({
       };
     }
 
-    if (mode === "single") {
+    if (effectiveMode === "single") {
       const createBody: CreateFileUploadBody = {
         mode: "single_part",
         filename,

@@ -1,3 +1,93 @@
+# Upgrading from v2.3 → v2.4
+
+v2.4 is a focused fix-up of the rough edges discovered while live-testing v2.3 against real Notion workspaces as an LLM caller. The tool surface (`notion_execute`, `notion_describe`) is unchanged. One breaking field rename, several "less typing, fewer round-trips" wins, and dramatically smaller validation envelopes.
+
+## Breaking changes
+
+### `upload_file` source discriminator renamed `kind` → `type`
+
+Every other discriminated union in this API uses `type` as the discriminator (`parent.type`, `icon.type`, `block.type`, `property value.type`, …). `upload_file` was the lone exception; it's been brought in line.
+
+```jsonc
+// Before (v2.3)
+{ "operation": "upload_file",
+  "payload": { "filename": "x.pdf", "content_type": "application/pdf",
+               "source": { "kind": "base64", "data": "..." } } }
+
+// After (v2.4)
+{ "operation": "upload_file",
+  "payload": { "filename": "x.pdf", "content_type": "application/pdf",
+               "source": { "type": "base64", "data": "..." } } }
+```
+
+The old `kind` field is now rejected at the schema layer (clear validation_error envelope).
+
+## Added
+
+### `get_self` alias for `get_bot_user`
+
+LLMs reach for `get_self` reflexively when probing identity. Both names now resolve to the same handler — no change needed, but `get_self` calls no longer fail with `unknown_operation`.
+
+### `include_properties` on `get_page`
+
+Defaults to `false`. Pass `true` to receive the flattened `properties` map (same shape `query_database` emits per row) alongside the page metadata.
+
+```jsonc
+{ "operation": "get_page",
+  "payload": { "page_id": "...", "include_properties": true } }
+```
+
+## Quality-of-life changes (non-breaking)
+
+### Validation error envelopes are now path-sliced
+
+Instead of dumping the full operation schema (5–13KB on `set_page_property`, `update_database`, `query_database`), the envelope slices the schema down to the failing field and summarizes any large unions into one-line-per-branch discriminator tags. Typical envelopes shrink from ~10KB to <1KB. The full schema is still one `notion_describe` call away.
+
+### `set_page_property` / `set_page_properties` accept a plain string for the title
+
+When `name === "title"` (singular) or `properties.title` (plural) is a string, the server wraps it into Notion's `{title:[{type:"text",text:{content}}]}` shape before validation.
+
+```jsonc
+// Both shapes now work:
+{ "operation": "set_page_property",
+  "payload": { "page_id": "...", "name": "title", "value": "My new title" } }
+
+{ "operation": "set_page_properties",
+  "payload": { "page_id": "...", "properties": { "title": "My new title" } } }
+```
+
+### `update_block` infers block type from `data`
+
+When `data` contains exactly one recognized block-type key (e.g. `{ paragraph: {...} }`), the server fills in the `type` discriminator automatically. The old explicit shape continues to work.
+
+```jsonc
+// New, inferred:
+{ "operation": "update_block",
+  "payload": { "block_id": "...", "data": { "paragraph": { "rich_text": [...] } } } }
+
+// Still valid:
+{ "operation": "update_block",
+  "payload": { "block_id": "...", "type": "paragraph",
+               "data": { "paragraph": { "rich_text": [...] } } } }
+```
+
+### `upload_file` mode defaults to `"single"`
+
+No need to pass `mode` for files <5MB; only specify `"multi"` for larger files.
+
+### `batch_mixed_blocks` returns `wrong_envelope` instead of `not_batchable`
+
+Calling `batch_mixed_blocks` with the universal `{ items: [...] }` envelope used to surface the generic `not_batchable` error. It now returns `wrong_envelope` with a fix that points at the correct `{ operations: [...] }` shape.
+
+## Call sites to audit
+
+- [ ] Rename `upload_file` `source.kind` → `source.type` everywhere.
+- [ ] Drop the explicit `mode: "single"` on small `upload_file` calls (still accepted, just unnecessary).
+- [ ] Optional: replace `set_page_property` rich-text title payloads with the string shorthand for readability.
+- [ ] Optional: replace `update_block`'s redundant `type` field with the inferred form.
+
+---
+
 # Upgrading from v2.2 → v2.3
 
 v2.3 is a follow-up token / clarity pass after live-testing every operation as an LLM caller. Tool surface (`notion_execute`, `notion_describe`) and operation names are unchanged. A handful of slim shapes and one field name are tightened; the WHERE DSL accepts more keyword cases. Pass `verbose: true` to fall back to v2.2-equivalent shapes for the slim changes.

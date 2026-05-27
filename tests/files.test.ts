@@ -134,7 +134,7 @@ describe("upload_file (single-part)", () => {
       mode: "single",
       filename: "hi.txt",
       content_type: "text/plain",
-      source: { kind: "base64", data: payload.toString("base64") },
+      source: { type: "base64", data: payload.toString("base64") },
     });
 
     expect(res).toMatchObject({
@@ -178,7 +178,7 @@ describe("upload_file (single-part)", () => {
     await dispatch("upload_file", {
       mode: "single",
       filename: "anything.txt",
-      source: { kind: "base64", data: Buffer.from("x").toString("base64") },
+      source: { type: "base64", data: Buffer.from("x").toString("base64") },
     });
 
     expect(notionStub.fileUploads.create).toHaveBeenCalledWith({
@@ -197,7 +197,7 @@ describe("upload_file (single-part)", () => {
     const res = await dispatch("upload_file", {
       mode: "single",
       filename: "weird.xyz",
-      source: { kind: "base64", data: Buffer.from("x").toString("base64") },
+      source: { type: "base64", data: Buffer.from("x").toString("base64") },
     });
     assertErr(res);
     expect(res.error.code).toBe("validation_error");
@@ -238,7 +238,7 @@ describe("upload_file (multi-part)", () => {
       mode: "multi",
       filename: "big.pdf",
       content_type: "application/pdf",
-      source: { kind: "base64", data: payload.toString("base64") },
+      source: { type: "base64", data: payload.toString("base64") },
     });
 
     expect(res).toMatchObject({
@@ -288,7 +288,7 @@ describe("upload_file (multi-part)", () => {
     const res = await dispatch("upload_file", {
       mode: "multi",
       filename: "big.pdf",
-      source: { kind: "base64", data: payload.toString("base64") },
+      source: { type: "base64", data: payload.toString("base64") },
     });
 
     expect((res as { ok: boolean }).ok).toBe(false);
@@ -330,7 +330,7 @@ describe("upload_file (URL source)", () => {
       const res = await dispatch("upload_file", {
         mode: "single",
         filename: "blob.pdf",
-        source: { kind: "url", url: "https://example.com/blob.pdf" },
+        source: { type: "url", url: "https://example.com/blob.pdf" },
       });
 
       expect(res).toMatchObject({ ok: true });
@@ -359,7 +359,6 @@ describe("upload_file (validation)", () => {
     expect(res.error).toMatchObject({
       code: "validation_error",
       example: {
-        mode: expect.any(String),
         filename: expect.any(String),
         source: expect.any(Object),
       },

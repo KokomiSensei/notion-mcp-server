@@ -1,6 +1,7 @@
 import type { ZodError } from "zod";
 import type { OperationDef, OperationError } from "../operations/types.js";
 import { emitJsonSchema } from "../schema/emit.js";
+import { sliceJsonSchema, summarizeSchema } from "./schema-slice.js";
 
 type ErrorWithSchema = OperationError & {
   operation: string;
@@ -31,17 +32,28 @@ export function buildValidationError(
   const firstMsg = issues[0]?.message ?? "Validation failed";
   const includeSchema = shouldIncludeSchema(zodError.issues);
 
+  // Slice the schema down to the failing field's subtree and summarize any
+  // unions so the envelope stays small — the unsliced schema for ops like
+  // set_page_property or update_database is 5-13KB.
+  let schemaForError: unknown;
+  if (includeSchema) {
+    const fullSchema = emitJsonSchema(def.schema) as Record<string, unknown>;
+    const sliced =
+      firstPath.length > 0 ? sliceJsonSchema(fullSchema, firstPath) : fullSchema;
+    schemaForError = summarizeSchema(sliced);
+  }
+
   return {
     code: "validation_error",
     operation: def.name,
     message: `${firstMsg}${firstPath.length ? ` at ${firstPath.join(".")}` : ""}`,
     path: firstPath.length ? firstPath : undefined,
     issues,
-    ...(includeSchema ? { schema: emitJsonSchema(def.schema) } : {}),
+    ...(includeSchema ? { schema: schemaForError } : {}),
     example: def.example,
     ...(def.exampleBatch ? { example_batch: def.exampleBatch } : {}),
     fix: includeSchema
-      ? "The full schema and a working example are included above. Adjust the payload and retry. For batch mode, wrap items in { items: [...] }."
+      ? "Match the example shape. The schema above shows the failing field; call notion_describe for the full operation schema. For batch mode, wrap items in { items: [...] }."
       : "A working example is included above. Match the example shape and retry. For batch mode, wrap items in { items: [...] }.",
   };
 }

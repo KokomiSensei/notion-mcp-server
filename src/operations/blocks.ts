@@ -164,6 +164,39 @@ function extractTypedBody(block: BlockTypedBody): Record<string, unknown> {
   return { [block.type]: block[block.type] };
 }
 
+// Block-type keys recognized in update_block's structured `data`.
+// When `data` has exactly one of these keys and no explicit `type`,
+// we infer the discriminator so the caller can write {to_do:{...}}
+// instead of {type:"to_do", to_do:{...}}.
+const INFERRABLE_BLOCK_TYPES = new Set([
+  "paragraph",
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "heading_4",
+  "quote",
+  "callout",
+  "toggle",
+  "bulleted_list_item",
+  "numbered_list_item",
+  "to_do",
+  "code",
+  "divider",
+  "image",
+  "tab",
+]);
+
+function inferDataType(input: unknown): unknown {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
+  const obj = input as Record<string, unknown>;
+  if (typeof obj.type === "string") return obj;
+  const matched = Object.keys(obj).filter((k) => INFERRABLE_BLOCK_TYPES.has(k));
+  if (matched.length === 1) {
+    return { type: matched[0], ...obj };
+  }
+  return obj;
+}
+
 const UpdateBlockParams = z
   .object({
     block_id: z.string(),
@@ -171,9 +204,12 @@ const UpdateBlockParams = z
       .string()
       .optional()
       .describe("New content as markdown. Must parse to exactly one block matching the existing block's type."),
-    data: TEXT_BLOCK_REQUEST_SCHEMA.optional().describe(
-      "Full structured block envelope ({type, <type>: {...}}). Type must match the existing block."
-    ),
+    data: z
+      .preprocess(inferDataType, TEXT_BLOCK_REQUEST_SCHEMA)
+      .optional()
+      .describe(
+        "Structured block envelope: `{type, <type>: {...}}` (e.g. `{type:\"to_do\", to_do:{rich_text:[...], checked:true}}`). When `type` is omitted, it is inferred from the sole block-type key, so `{to_do:{...}}` works as well. Type must match the existing block."
+      ),
     verbose: VERBOSE,
   })
   .refine((v) => Boolean(v.markdown) !== Boolean(v.data), {
@@ -182,14 +218,18 @@ const UpdateBlockParams = z
 
 register({
   name: "update_block",
-  description: "Update an existing block's content. Use markdown for prose blocks.",
+  description:
+    "Update an existing block's content. Pass `markdown` for prose blocks (parsed locally to a single block), or `data` for structured updates such as toggling a to_do's `checked` field or setting a code block's language.",
   batchable: true,
   schema: UpdateBlockParams,
   example: { block_id: "<block-id>", markdown: "Updated paragraph text." },
   exampleBatch: {
     items: [
       { block_id: "<block-id-1>", markdown: "First update." },
-      { block_id: "<block-id-2>", markdown: "Second update." },
+      {
+        block_id: "<block-id-2>",
+        data: { to_do: { rich_text: [{ type: "text", text: { content: "Done" } }], checked: true } },
+      },
     ],
   },
   handler: tryHandler(async ({ block_id, markdown, data, verbose }) => {
@@ -253,7 +293,7 @@ const MixedOp = z.discriminatedUnion("op", [
     op: z.literal("update"),
     block_id: z.string(),
     markdown: z.string().optional(),
-    data: TEXT_BLOCK_REQUEST_SCHEMA.optional(),
+    data: z.preprocess(inferDataType, TEXT_BLOCK_REQUEST_SCHEMA).optional(),
   }),
   z.object({
     op: z.literal("delete"),
@@ -268,7 +308,8 @@ const BatchMixedBlocksParams = z.object({
 
 register({
   name: "batch_mixed_blocks",
-  description: "Run a sequence of mixed block operations (append/update/delete) in order. For pure single-op batches, prefer the items[] form on append_blocks/update_block/delete_block.",
+  description:
+    "Run a sequence of mixed block operations (append/update/delete) in order. Uses a non-standard envelope: { operations: [{ op: \"append\"|\"update\"|\"delete\", ... }] } — NOT the universal { items: [...] } batch envelope. For pure single-op batches, prefer the items[] form on append_blocks / update_block / delete_block.",
   batchable: false,
   schema: BatchMixedBlocksParams,
   example: {

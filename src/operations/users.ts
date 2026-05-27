@@ -100,15 +100,26 @@ register({
 
 const GetBotUserParams = z.object({ verbose: VERBOSE });
 
+const getBotUserHandler = tryHandler(async ({ verbose }: z.infer<typeof GetBotUserParams>) => {
+  const notion = await getClient();
+  const response = await notion.users.me({});
+  return { ok: true as const, data: slimUser(response, verbose ?? false) };
+});
+
 register({
   name: "get_bot_user",
-  description: "Get the integration's bot user. Always works without extra capabilities.",
+  description: "Get the integration's bot user. Always works without extra capabilities. Alias: get_self.",
   batchable: false,
   schema: GetBotUserParams,
   example: {},
-  handler: tryHandler(async ({ verbose }) => {
-    const notion = await getClient();
-    const response = await notion.users.me({});
-    return { ok: true, data: slimUser(response, verbose ?? false) };
-  }),
+  handler: getBotUserHandler,
+});
+
+register({
+  name: "get_self",
+  description: "Alias of get_bot_user. Returns the integration's bot user (i.e. the identity behind the current token).",
+  batchable: false,
+  schema: GetBotUserParams,
+  example: {},
+  handler: getBotUserHandler,
 });

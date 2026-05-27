@@ -34,6 +34,7 @@ export type OperationName =
   | "list_users"
   | "get_user"
   | "get_bot_user"
+  | "get_self"
   | "upload_file"
   | "list_file_uploads"
   | "get_file_upload";

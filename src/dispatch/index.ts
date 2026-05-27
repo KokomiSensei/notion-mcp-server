@@ -53,6 +53,20 @@ export async function dispatch(
 
   if (isBatchPayload(payload)) {
     if (!def.batchable) {
+      // batch_mixed_blocks looks batch-shaped but uses its own `operations[]`
+      // envelope (mixed op kinds, no per-item rollback). Point callers at the
+      // right shape instead of the generic not_batchable message.
+      if (operationName === "batch_mixed_blocks") {
+        return {
+          ok: false,
+          error: {
+            code: "wrong_envelope",
+            message:
+              'batch_mixed_blocks uses its own envelope: { operations: [{ op: "append"|"update"|"delete", ... }] }. The universal { items: [...] } envelope does not apply here.',
+            fix: 'Wrap your operations as { operations: [{ op: "append", block_id, markdown }, { op: "update", ... }, { op: "delete", ... }] }. Or use the items[] form on append_blocks / update_block / delete_block for single-kind batches.',
+          },
+        };
+      }
       return {
         ok: false,
         error: {

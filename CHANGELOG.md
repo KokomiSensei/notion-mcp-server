@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] — 2026-05-27
+
+### Breaking changes
+
+- **`upload_file` source discriminator renamed `kind` → `type`.** Brings the file source shape in line with every other discriminated union in the API (`parent.type`, `icon.type`, `block.type`, etc.). Pass `{ source: { type: "base64", data: "..." } }` or `{ source: { type: "url", url: "..." } }`. The legacy `kind` field is rejected outright. See [MIGRATION.md](./MIGRATION.md).
+
+### Added
+
+- **`get_self` alias for `get_bot_user`.** LLMs reach for `get_self` reflexively when probing identity. Both names now resolve to the same handler.
+- **`include_properties` flag on `get_page`.** Defaults to `false`. Pass `true` to receive the flattened `properties` map alongside the page metadata — same shape `query_database` emits per row.
+
+### Changed
+
+- **Validation error envelopes are now path-sliced.** Instead of dumping the full operation schema (5–13KB on `set_page_property`, `update_database`, `query_database`), the envelope now slices the schema down to the failing field and summarizes any large unions into one-line-per-branch discriminator tags. Typical envelopes shrink from ~10KB to <1KB. The full schema is still one `notion_describe` call away.
+- **`set_page_property` / `set_page_properties` accept a plain string for the title.** When `name === "title"` (singular) or `properties.title` (plural) is a string, the server wraps it into Notion's `{title:[{type:"text",text:{content}}]}` shape before validation. Removes the most common LLM authoring mistake.
+- **`update_block` infers the block type from `data`.** When `data` contains exactly one recognized block-type key (e.g. `{ paragraph: {...} }`), the server fills in the `type` discriminator automatically. Old shape `{ type: "paragraph", data: { paragraph: {...} } }` still works.
+- **`upload_file` mode defaults to `"single"`.** No need to pass `mode` for the 99% case; only specify `"multi"` for files >5MB.
+- **`batch_mixed_blocks` now returns `wrong_envelope` instead of `not_batchable`** when called with the universal `{ items: [...] }` form. The error message points callers at the correct `{ operations: [...] }` envelope.
+
 ## [2.3.0] — 2026-05-27
 
 ### Changed
