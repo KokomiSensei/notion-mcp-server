@@ -1,6 +1,6 @@
 {
   "name": "notion-mcp-server",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "type": "module",
   "bin": {
     "notion-mcp-server": "build/index.js"
@@ -16,13 +16,27 @@
   "homepage": "https://github.com/awkoy/notion-mcp-server",
   "keywords": [
     "notion",
+    "notion-mcp",
+    "notion-mcp-server",
+    "notion-api",
+    "notion-integration",
     "mcp",
+    "mcp-server",
     "modelcontextprotocol",
-    "ai"
+    "model-context-protocol",
+    "claude",
+    "claude-desktop",
+    "cursor",
+    "chatgpt",
+    "anthropic",
+    "ai",
+    "ai-agent",
+    "agent",
+    "llm"
   ],
   "author": "Yaroslav Boiko <y.boikodeveloper@gmail.com>",
   "license": "MIT",
-  "description": "MCP for Notion",
+  "description": "Notion MCP server for Claude, Cursor, ChatGPT, and Claude Desktop — connect AI agents to Notion via the Model Context Protocol. Create pages, query databases, append blocks, upload files, and more in natural language.",
   "files": [
     "build"
   ],
