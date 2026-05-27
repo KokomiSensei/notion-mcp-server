@@ -128,7 +128,7 @@ const UploadFileParams = z.object({
 register({
   name: "upload_file",
   description:
-    "Upload a file via Notion's file_uploads API. Handles single-part (one create + one send) and multi-part (create + N sends + complete) transparently. Source is either base64-encoded bytes or a URL to fetch.",
+    "Upload a file via Notion's file_uploads API. Handles single-part (one create + one send) and multi-part (create + N sends + complete) transparently.\n\nSource shapes:\n  • Base64 bytes: `source: { kind: \"base64\", data: \"<b64 string>\" }`\n  • Public URL:   `source: { kind: \"url\", url: \"https://example.com/file.pdf\" }` (the server fetches it server-side).",
   batchable: false,
   schema: UploadFileParams,
   example: {

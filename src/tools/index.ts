@@ -144,5 +144,36 @@ function renderOperationsIndex(): string {
   for (const def of listOperations()) {
     lines.push(`| \`${def.name}\` | ${def.batchable ? "yes" : "no"} | ${def.description} |`);
   }
+  lines.push("", "## `query_database` WHERE DSL", "");
+  lines.push(
+    "`query_database.where` is a compact DSL that compiles to the Notion filter object. AND-by-default at the top level; nest `and`/`or`/`not` (case-insensitive — `AND`/`OR`/`NOT` also work) for boolean groups, prefix scalars with `__type` to force the property type, or fall back to raw `filter` for anything the DSL can't express.",
+    "",
+    "Common shapes:",
+    "",
+    "```jsonc",
+    "// Single equality (property type inferred from value, or from data source schema via __type):",
+    "{ \"where\": { \"Status\": \"Open\" } }",
+    "",
+    "// AND of multiple properties (top-level keys are implicit AND):",
+    "{ \"where\": { \"Status\": \"Done\", \"Done\": true } }",
+    "",
+    "// Explicit operator on one property:",
+    "{ \"where\": { \"Priority\": { \"gte\": 3 } } }",
+    "",
+    "// Boolean groups (lowercase or uppercase — both work):",
+    "{ \"where\": { \"or\": [ { \"Status\": \"Open\" }, { \"Status\": \"In progress\" } ] } }",
+    "{ \"where\": { \"and\": [ { \"Status\": \"Done\" }, { \"Priority\": { \"gte\": 5 } } ] } }",
+    "{ \"where\": { \"not\": { \"Status\": \"Done\" } } }",
+    "",
+    "// in / notIn fan out to OR / AND of equals:",
+    "{ \"where\": { \"Status\": { \"in\": [\"Open\", \"In progress\"] } } }",
+    "",
+    "// Force property type when value shape is ambiguous (e.g. a string that's actually a multi_select tag):",
+    "{ \"where\": { \"Tags\": { \"__type\": \"multi_select\", \"eq\": \"alpha\" } } }",
+    "{ \"where\": { \"Created\": { \"__type\": \"date\", \"on_or_after\": \"2026-01-01\" } } }",
+    "```",
+    "",
+    "If a column is literally named `and`/`or`/`not`, wrap it as an operator object (e.g. `{ \"and\": { \"__type\": \"select\", \"eq\": \"x\" } }`) so it isn't parsed as a combinator. For anything the DSL can't express, pass `filter` (raw Notion filter object) instead of `where`."
+  );
   return lines.join("\n");
 }

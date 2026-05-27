@@ -266,10 +266,22 @@ register({
         if (!hasMore || collected.length >= limit) break;
         cursor = slim.next_cursor ?? undefined;
       }
+      if (verbose) {
+        return {
+          ok: true,
+          data: {
+            results: collected,
+            truncated: hasMore && collected.length >= limit,
+            pages_walked: pagesWalked,
+          },
+        };
+      }
+      const { parent, rows } = hoistParent(collected as RowWithParent[]);
       return {
         ok: true,
         data: {
-          results: collected,
+          ...(parent !== undefined ? { parent } : {}),
+          results: rows,
           truncated: hasMore && collected.length >= limit,
           pages_walked: pagesWalked,
         },
@@ -277,9 +289,39 @@ register({
     }
 
     const response = await runQuery(start_cursor, pageSize);
-    return { ok: true, data: slimList(response, slimRow, verbose ?? false) };
+    const slim = slimList(response, slimRow, verbose ?? false);
+    if (verbose) return { ok: true, data: slim };
+    const { parent, rows } = hoistParent(slim.results as RowWithParent[]);
+    return {
+      ok: true,
+      data: {
+        ...(parent !== undefined ? { parent } : {}),
+        results: rows,
+        has_more: slim.has_more,
+        next_cursor: slim.next_cursor,
+      },
+    };
   }),
 });
+
+type RowWithParent = { parent?: unknown } & Record<string, unknown>;
+
+// query_database rows always come from one data source, so the `parent`
+// object is identical across every result. Lift it to the list level — on
+// a 100-row page that saves ~80 bytes per row, ≈8KB per response.
+function hoistParent(rows: readonly RowWithParent[]): {
+  parent?: unknown;
+  rows: Array<Omit<RowWithParent, "parent">>;
+} {
+  if (rows.length === 0) return { rows: [] };
+  const first = rows[0];
+  if (first.parent === undefined) return { rows: rows.slice() };
+  const parent = first.parent;
+  return {
+    parent,
+    rows: rows.map(({ parent: _omit, ...rest }) => rest),
+  };
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // update_database

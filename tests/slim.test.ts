@@ -3,6 +3,7 @@ import {
   slimPage,
   slimBlock,
   slimDatabase,
+  slimDataSource,
   slimUser,
   slimComment,
   slimList,
@@ -284,6 +285,29 @@ describe("slimDatabase", () => {
   });
 });
 
+describe("slimDataSource", () => {
+  it("maps property names to their notion types (so query planners don't need verbose)", () => {
+    const ds = fx<Parameters<typeof slimDataSource>[0]>({
+      object: "data_source",
+      id: "ds1",
+      url: "u",
+      title: [{ plain_text: "Tasks" }],
+      description: [],
+      parent: { type: "database_id", database_id: "db1" },
+      properties: {
+        Name: { type: "title" },
+        Priority: { type: "number" },
+        Status: { type: "status" },
+      },
+    });
+    expect(slimDataSource(ds)).toMatchObject({
+      id: "ds1",
+      title: "Tasks",
+      properties: { Name: "title", Priority: "number", Status: "status" },
+    });
+  });
+});
+
 describe("slimUser", () => {
   it("includes person.email for person users", () => {
     const u = fx<Parameters<typeof slimUser>[0]>({
@@ -304,10 +328,33 @@ describe("slimUser", () => {
     });
     expect(slimUser(u)).toMatchObject({ id: "b1", type: "bot", workspace_name: "My WS" });
   });
+
+  it("omits avatar_url and workspace_name when missing rather than serializing null", () => {
+    const u = fx<Parameters<typeof slimUser>[0]>({
+      id: "u2",
+      type: "person",
+      name: "Anon",
+      avatar_url: null,
+      person: { email: "a@e.com" },
+    });
+    const out = slimUser(u) as Record<string, unknown>;
+    expect(out).not.toHaveProperty("avatar_url");
+
+    const bot = fx<Parameters<typeof slimUser>[0]>({
+      id: "b2",
+      type: "bot",
+      name: "Bot",
+      avatar_url: null,
+      bot: {},
+    });
+    const botOut = slimUser(bot) as Record<string, unknown>;
+    expect(botOut).not.toHaveProperty("avatar_url");
+    expect(botOut).not.toHaveProperty("workspace_name");
+  });
 });
 
 describe("slimComment", () => {
-  it("collapses rich_text to plain text", () => {
+  it("collapses rich_text to plain text and drops created_time", () => {
     const c = fx<Parameters<typeof slimComment>[0]>({
       id: "c1",
       parent: { type: "page_id", page_id: "p1" },
@@ -316,7 +363,9 @@ describe("slimComment", () => {
       created_by: { id: "u1" },
       created_time: "t",
     });
-    expect(slimComment(c)).toMatchObject({ text: "hi there", created_by: "u1" });
+    const out = slimComment(c) as Record<string, unknown>;
+    expect(out).toMatchObject({ text: "hi there", created_by: "u1" });
+    expect(out).not.toHaveProperty("created_time");
   });
 });
 

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-05-27
+
+### Changed
+
+- **`get_data_source` now returns `properties` as a `{ name: type }` map** instead of a name-only array. Same byte cost, but the type info is what `query_database` planners actually need — callers no longer have to drop `verbose: true` just to learn property types.
+- **`move_page` renamed `new_parent` → `parent`** so the field matches `create_page`. One less inconsistency to memorize.
+- **`query_database` hoists the per-row `parent` to the list level.** Every row in a `query_database` result has the same parent (single data source), so the parent is emitted once on the list and stripped from each row — on a 100-row page this saves ≈8KB. `verbose: true` keeps per-row parents.
+- **`slimUser` omits `avatar_url`** when it's missing, instead of serializing `avatar_url: null`. Bot `workspace_name` is also conditional now.
+- **`slimComment` drops `created_time`** for consistency with other slim shapes (other ops dropped it in v2.2). Use `verbose: true` if you need it.
+- **WHERE DSL keywords are case-insensitive.** `and`/`or`/`not` (canonical, matches Notion's filter JSON) and `AND`/`OR`/`NOT` (SQL-style) both work. If a column is literally named `and`/`or`/`not`, wrap it as an operator object with `__type` to disambiguate.
+- **`upload_file` description expanded** to spell out the two supported source shapes (`base64` and `url`) up front, so the LLM doesn't have to call `notion_describe` first for the common case.
+
+### Fixed
+
+- **`unique_id` prefix is validated locally.** Notion rejects single-letter prefixes with a generic 400; we now reject them at the schema layer with a precise message (2–10 chars, letter-prefixed, alphanumeric + hyphen only). Saves a round-trip and gives the LLM a clean "fix" instead of an API echo.
+
 ## [2.2.0] — 2026-05-27
 
 ### Changed

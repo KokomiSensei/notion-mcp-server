@@ -294,7 +294,15 @@ export const UNIQUE_ID_DB_PROPERTY_SCHEMA = z.object({
   type: z.literal("unique_id"),
   unique_id: z
     .object({
-      prefix: z.string().nullable().optional().describe("Prefix shown before the auto-incrementing number."),
+      prefix: z
+        .string()
+        .regex(
+          /^[A-Za-z][A-Za-z0-9-]{1,9}$/,
+          "prefix must start with a letter, then 1–9 more letters/digits/hyphens (total length 2–10)"
+        )
+        .nullable()
+        .optional()
+        .describe("Prefix shown before the auto-incrementing number. 2–10 chars total, must start with a letter, alphanumeric + hyphen only. Single-letter prefixes are rejected by Notion."),
     })
     .describe("Unique ID property configuration"),
   description: z.string().optional(),

@@ -237,6 +237,43 @@ describe("query_database", () => {
     expect((res as { error: { code: string } }).error.code).toBe("where_compile_error");
     expect(notionStub.dataSources.query).not.toHaveBeenCalled();
   });
+
+  it("hoists the common parent off rows to the list level (non-verbose)", async () => {
+    const parent = { type: "data_source_id", data_source_id: "ds-1" };
+    notionStub.dataSources.query.mockResolvedValue({
+      object: "list",
+      results: [
+        { object: "page", id: "p-1", url: "u1", properties: {}, parent },
+        { object: "page", id: "p-2", url: "u2", properties: {}, parent },
+      ],
+      has_more: false,
+      next_cursor: null,
+    });
+
+    const res = await dispatch("query_database", { data_source_id: "ds-1" });
+    const data = (res as {
+      data: { parent: unknown; results: Array<Record<string, unknown>> };
+    }).data;
+    expect(data.parent).toEqual(parent);
+    for (const row of data.results) {
+      expect(row).not.toHaveProperty("parent");
+    }
+  });
+
+  it("preserves per-row parent when verbose=true", async () => {
+    const parent = { type: "data_source_id", data_source_id: "ds-1" };
+    notionStub.dataSources.query.mockResolvedValue({
+      object: "list",
+      results: [{ object: "page", id: "p-1", url: "u1", properties: {}, parent }],
+      has_more: false,
+      next_cursor: null,
+    });
+
+    const res = await dispatch("query_database", { data_source_id: "ds-1", verbose: true });
+    const data = (res as { data: { results: Array<Record<string, unknown>> } }).data;
+    expect(data).not.toHaveProperty("parent");
+    expect(data.results[0]).toHaveProperty("parent");
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────
@@ -282,7 +319,7 @@ describe("list_data_sources", () => {
 });
 
 describe("get_data_source", () => {
-  it("slim shape lists property keys", async () => {
+  it("slim shape maps property names to types", async () => {
     notionStub.dataSources.retrieve.mockResolvedValue({
       object: "data_source",
       id: "ds-1",
@@ -298,7 +335,7 @@ describe("get_data_source", () => {
       data: {
         id: "ds-1",
         title: "Tasks",
-        properties: ["Name", "Status"],
+        properties: { Name: "title", Status: "status" },
       },
     });
   });
@@ -340,7 +377,7 @@ describe("update_data_source", () => {
 // ────────────────────────────────────────────────────────────────────────
 
 describe("move_page", () => {
-  it("forwards new_parent as `parent` on the SDK call (matching the move endpoint body)", async () => {
+  it("forwards parent on the SDK call (matching the move endpoint body)", async () => {
     notionStub.pages.move.mockResolvedValue({
       id: "p-1",
       url: "https://notion.so/p-1",
@@ -350,15 +387,13 @@ describe("move_page", () => {
 
     const res = await dispatch("move_page", {
       page_id: "p-1",
-      new_parent: { type: "page_id", page_id: "dest" },
+      parent: { type: "page_id", page_id: "dest" },
     });
     expect((res as { ok: boolean }).ok).toBe(true);
     expect(notionStub.pages.move).toHaveBeenCalledWith({
       page_id: "p-1",
       parent: { type: "page_id", page_id: "dest" },
     });
-    const call = notionStub.pages.move.mock.calls[0][0] as Record<string, unknown>;
-    expect(call).not.toHaveProperty("new_parent");
   });
 
   it("accepts data_source_id parent", async () => {
@@ -371,7 +406,7 @@ describe("move_page", () => {
 
     const res = await dispatch("move_page", {
       page_id: "p-1",
-      new_parent: { type: "data_source_id", data_source_id: "ds-1" },
+      parent: { type: "data_source_id", data_source_id: "ds-1" },
     });
     expect((res as { ok: boolean }).ok).toBe(true);
     expect(notionStub.pages.move).toHaveBeenCalledWith({
@@ -383,7 +418,7 @@ describe("move_page", () => {
   it("rejects unsupported parent variants with self-healing envelope", async () => {
     const res = await dispatch("move_page", {
       page_id: "p-1",
-      new_parent: { type: "database_id", database_id: "db-1" },
+      parent: { type: "database_id", database_id: "db-1" },
     });
     expect((res as { ok: boolean }).ok).toBe(false);
     const err = (res as { error: { code: string; fix: string } }).error;
@@ -395,7 +430,7 @@ describe("move_page", () => {
   it("rejects workspace parent (move endpoint only supports page_id or data_source_id)", async () => {
     const res = await dispatch("move_page", {
       page_id: "p-1",
-      new_parent: { type: "workspace", workspace: true },
+      parent: { type: "workspace", workspace: true },
     });
     expect((res as { ok: boolean }).ok).toBe(false);
     expect((res as { error: { code: string } }).error.code).toBe("unsupported_parent");
@@ -494,7 +529,7 @@ describe("update_page_markdown", () => {
 // ────────────────────────────────────────────────────────────────────────
 
 describe("get_comment", () => {
-  it("returns slim {id, created_time}", async () => {
+  it("returns slim {id, created_by, text}", async () => {
     notionStub.comments.retrieve.mockResolvedValue({
       id: "c-1",
       created_by: { id: "u-1" },
@@ -505,8 +540,10 @@ describe("get_comment", () => {
     const res = await dispatch("get_comment", { comment_id: "c-1" });
     expect(res).toMatchObject({
       ok: true,
-      data: { id: "c-1", created_time: "2026-01-01" },
+      data: { id: "c-1", created_by: "u-1", text: "Hi" },
     });
+    // created_time was dropped in v2.3 for consistency with other slim shapes
+    expect((res as { data: Record<string, unknown> }).data).not.toHaveProperty("created_time");
   });
 });
 
@@ -714,6 +751,40 @@ describe("create_database uses initial_data_source shape", () => {
     expect((call.initial_data_source as { properties: unknown }).properties).toEqual({
       Name: { type: "title", title: {} },
     });
+  });
+
+  it("rejects a one-character unique_id prefix locally rather than round-tripping to Notion", async () => {
+    // Notion rejects single-letter prefixes with a generic 400; catch it at the
+    // schema layer so the LLM gets a clear "fix" instead of an API echo.
+    const res = await dispatch("create_database", {
+      parent: { type: "page_id", page_id: "p-1" },
+      title: "Tasks",
+      properties: {
+        Name: { type: "title", title: {} },
+        Id: { type: "unique_id", unique_id: { prefix: "T" } },
+      },
+    });
+    expect((res as { ok: boolean }).ok).toBe(false);
+    expect((res as { error: { code: string } }).error.code).toBe("validation_error");
+    expect(notionStub.databases.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a valid 2+ char unique_id prefix", async () => {
+    notionStub.databases.create.mockResolvedValue({
+      id: "db-new",
+      title: [{ plain_text: "T" }],
+      properties: {},
+    });
+
+    const res = await dispatch("create_database", {
+      parent: { type: "page_id", page_id: "p-1" },
+      title: "T",
+      properties: {
+        Name: { type: "title", title: {} },
+        Id: { type: "unique_id", unique_id: { prefix: "TSK" } },
+      },
+    });
+    expect((res as { ok: boolean }).ok).toBe(true);
   });
 });
 

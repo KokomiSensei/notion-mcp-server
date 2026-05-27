@@ -234,7 +234,12 @@ export function slimDataSource(ds: DataSourceResponse, verbose = false) {
     title: extractRichText(ds.title),
     ...(description ? { description } : {}),
     parent: ds.parent,
-    properties: Object.keys(ds.properties),
+    // name → property-type map. Same byte cost as a name-only array but the
+    // type info is what query_database planners actually need (otherwise
+    // callers would have to drop verbose:true just to learn types).
+    properties: Object.fromEntries(
+      Object.entries(ds.properties).map(([name, def]) => [name, def.type])
+    ),
     ...(ds.icon ? { icon: ds.icon.type } : {}),
     ...(ds.in_trash ? { in_trash: true } : {}),
   };
@@ -258,13 +263,13 @@ export function slimUser(user: UserResponse, verbose = false) {
     id: user.id,
     type: user.type,
     name: user.name,
-    avatar_url: user.avatar_url,
+    ...(user.avatar_url ? { avatar_url: user.avatar_url } : {}),
   };
   if (user.type === "person") return { ...base, email: user.person.email };
   if (user.type === "bot") {
     const workspaceName =
       "workspace_name" in user.bot ? user.bot.workspace_name : undefined;
-    return { ...base, workspace_name: workspaceName };
+    return workspaceName ? { ...base, workspace_name: workspaceName } : base;
   }
   return base;
 }
@@ -292,7 +297,6 @@ export function slimComment(comment: CommentResponse, verbose = false) {
     discussion_id: comment.discussion_id,
     text: extractRichText(comment.rich_text),
     created_by: comment.created_by.id,
-    created_time: comment.created_time,
   };
 }
 

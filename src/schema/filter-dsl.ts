@@ -319,13 +319,19 @@ function negate(filter: NotionFilter): NotionFilter {
 
 // ─── Top-level recursion ────────────────────────────────────────────────────
 
-const LOGICAL_AND = "AND";
-const LOGICAL_OR = "OR";
-const LOGICAL_NOT = "NOT";
+// Boolean combinator keywords are case-insensitive. Lowercase is the
+// canonical form (matches Notion's own filter JSON), but uppercase is
+// accepted so callers who think of AND/OR/NOT as SQL-style keywords
+// don't trip on case. A column literally named "and"/"AND" must be
+// disambiguated with __type via an operator object — collision is
+// documented in the resource.
+const AND_KEYS = new Set(["and", "AND"]);
+const OR_KEYS = new Set(["or", "OR"]);
+const NOT_KEYS = new Set(["not", "NOT"]);
 
 function compileCombinator(
   value: unknown,
-  keyword: typeof LOGICAL_AND | typeof LOGICAL_OR,
+  keyword: string,
   wrapKey: "and" | "or"
 ): NotionFilter | undefined {
   if (!Array.isArray(value)) {
@@ -350,17 +356,17 @@ export function compileWhere(where: unknown): NotionFilter | undefined {
   const parts: NotionFilter[] = [];
 
   for (const [key, value] of entries) {
-    if (key === LOGICAL_AND) {
-      const compiled = compileCombinator(value, LOGICAL_AND, "and");
+    if (AND_KEYS.has(key)) {
+      const compiled = compileCombinator(value, key, "and");
       if (compiled) parts.push(compiled);
       continue;
     }
-    if (key === LOGICAL_OR) {
-      const compiled = compileCombinator(value, LOGICAL_OR, "or");
+    if (OR_KEYS.has(key)) {
+      const compiled = compileCombinator(value, key, "or");
       if (compiled) parts.push(compiled);
       continue;
     }
-    if (key === LOGICAL_NOT) {
+    if (NOT_KEYS.has(key)) {
       const inner = compileWhere(value);
       if (inner) parts.push(negate(inner));
       continue;

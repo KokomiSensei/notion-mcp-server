@@ -405,42 +405,42 @@ register({
 
 const MovePageParams = z.object({
   page_id: z.string(),
-  new_parent: PARENT_SCHEMA.describe("New parent (page_id, database_id, data_source_id, block_id, or workspace)."),
+  parent: PARENT_SCHEMA.describe("New parent (page_id or data_source_id). Same shape as create_page's `parent`."),
   verbose: VERBOSE,
 });
 
 register({
   name: "move_page",
-  description: "Move a page to a new parent without recreating it. Preserves the page's blocks, properties, and comments.",
+  description: "Move a page to a new parent without recreating it. Preserves the page's blocks, properties, and comments. The destination uses `parent` — same field name as create_page.",
   batchable: true,
   schema: MovePageParams,
   example: {
     page_id: "<page-id>",
-    new_parent: { type: "page_id", page_id: "<new-parent-id>" },
+    parent: { type: "page_id", page_id: "<new-parent-id>" },
   },
   exampleBatch: {
     items: [
-      { page_id: "<p1>", new_parent: { type: "page_id", page_id: "<dest>" } },
-      { page_id: "<p2>", new_parent: { type: "page_id", page_id: "<dest>" } },
+      { page_id: "<p1>", parent: { type: "page_id", page_id: "<dest>" } },
+      { page_id: "<p2>", parent: { type: "page_id", page_id: "<dest>" } },
     ],
   },
-  handler: tryHandler(async ({ page_id, new_parent, verbose }) => {
-    if (new_parent.type !== "page_id" && new_parent.type !== "data_source_id") {
+  handler: tryHandler(async ({ page_id, parent, verbose }) => {
+    if (parent.type !== "page_id" && parent.type !== "data_source_id") {
       return {
         ok: false,
         error: {
           code: "unsupported_parent",
-          message: `move_page only accepts page_id or data_source_id, received ${new_parent.type}.`,
+          message: `move_page only accepts page_id or data_source_id, received ${parent.type}.`,
           fix:
-            new_parent.type === "database_id"
+            parent.type === "database_id"
               ? "Call list_data_sources on the database and pass the resolved data_source_id."
-              : "Set new_parent.type to 'page_id' or 'data_source_id'.",
+              : "Set parent.type to 'page_id' or 'data_source_id'.",
         },
       };
     }
     const notion = await getClient();
     const response = await notion.pages.move(
-      asSdk<MovePageBody>({ page_id, parent: new_parent })
+      asSdk<MovePageBody>({ page_id, parent })
     );
     return { ok: true, data: slimPage(response, verbose ?? false) };
   }),

@@ -1,3 +1,61 @@
+# Upgrading from v2.2 → v2.3
+
+v2.3 is a follow-up token / clarity pass after live-testing every operation as an LLM caller. Tool surface (`notion_execute`, `notion_describe`) and operation names are unchanged. A handful of slim shapes and one field name are tightened; the WHERE DSL accepts more keyword cases. Pass `verbose: true` to fall back to v2.2-equivalent shapes for the slim changes.
+
+## What changed
+
+### `move_page` field renamed
+
+`new_parent` → `parent`, matching `create_page`'s parent field. Drop-in: rename your payload key.
+
+```jsonc
+// Before
+{ "operation": "move_page", "payload": { "page_id": "...", "new_parent": { "type": "page_id", "page_id": "..." } } }
+// After
+{ "operation": "move_page", "payload": { "page_id": "...", "parent":     { "type": "page_id", "page_id": "..." } } }
+```
+
+### `get_data_source` returns a typed property map
+
+Previously `properties` was a name-only array (`["Name", "Status"]`). Now it's a `{ name: type }` map (`{ Name: "title", Status: "status" }`). Same wire size; you no longer need `verbose: true` to plan a `query_database` payload.
+
+### `query_database` hoists `parent` to the list level
+
+Slim default — every row in a `query_database` response shares the same parent (single data source), so the parent is now emitted once at the list level and removed from each row. On a 100-row page that's ≈8KB saved. Verbose responses keep per-row parents.
+
+```jsonc
+// Slim shape (v2.3)
+{ "parent": { "type": "data_source_id", "data_source_id": "..." },
+  "results": [{ "id": "...", "title": "...", "properties": {...} }, ...] }
+```
+
+### `slimUser` / `slimComment` clean-ups
+
+- `avatar_url` is only emitted when non-null (no more `"avatar_url": null` lines).
+- Bot users only carry `workspace_name` when set.
+- Comments drop `created_time` from the slim shape (other ops already did in v2.2). Use `verbose: true` if you need it.
+
+### WHERE DSL keywords are case-insensitive
+
+`and`/`or`/`not` (canonical) and `AND`/`OR`/`NOT` (SQL-style) both work. If you have a property literally named `and`/`or`/`not`, wrap it as an operator object with `__type` to keep it from being parsed as a combinator.
+
+### `unique_id` prefix validated locally
+
+Notion rejects single-letter prefixes with a generic 400; we now reject `prefix` values that aren't 2–10 chars, letter-prefixed, alphanumeric + hyphen with a precise schema error instead.
+
+### `upload_file` description spells out source shapes
+
+No behavior change — the description now lists the two `source` variants (`{ kind: "base64", data: "<b64>" }` and `{ kind: "url", url: "..." }`) so a planner doesn't need to call `notion_describe` first.
+
+## Call sites to audit
+
+- [ ] Rename `move_page` `new_parent` → `parent`.
+- [ ] If you read `get_data_source.properties[i]` as a string, switch to `Object.keys(properties)` (or read the type via the value).
+- [ ] If you read `parent` off each `query_database` row, read it from the list level instead (or pass `verbose: true`).
+- [ ] If you depended on `slimComment.created_time` or `slimUser.avatar_url: null`, pass `verbose: true`.
+
+---
+
 # Upgrading from v2.1 → v2.2
 
 v2.2 is a **shape-only** revision of the slim response shapers. Tool surface (`notion_execute`, `notion_describe`) and operation names are unchanged. The goal is to cut token bloat on default reads. Pass `verbose: true` anywhere you depended on the v2.1 raw fields — that gives you the full Notion SDK response.

@@ -145,6 +145,25 @@ describe("compileWhere — logical composition", () => {
       ],
     });
   });
+
+  it("accepts lowercase and/or/not as combinator keywords", () => {
+    expect(compileWhere({ and: [{ Status: "Done" }, { Done: true }] })).toEqual({
+      and: [
+        { property: "Status", select: { equals: "Done" } },
+        { property: "Done", checkbox: { equals: true } },
+      ],
+    });
+    expect(compileWhere({ or: [{ Status: "Open" }, { Status: "Done" }] })).toEqual({
+      or: [
+        { property: "Status", select: { equals: "Open" } },
+        { property: "Status", select: { equals: "Done" } },
+      ],
+    });
+    expect(compileWhere({ not: { Status: "Done" } })).toEqual({
+      property: "Status",
+      select: { does_not_equal: "Done" },
+    });
+  });
 });
 
 describe("compileWhere — empty + invalid input", () => {
