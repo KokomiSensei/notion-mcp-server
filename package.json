@@ -1,6 +1,6 @@
 {
   "name": "notion-mcp-server",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "type": "module",
   "bin": {
     "notion-mcp-server": "build/index.js"
@@ -49,6 +49,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/mdast": "^4.0.4",
     "@types/node": "^22.13.10",
     "shx": "^0.3.4",
     "typescript": "^5.8.2",
