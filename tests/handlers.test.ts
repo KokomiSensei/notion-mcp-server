@@ -637,6 +637,56 @@ describe("append_blocks position wire shape", () => {
   });
 });
 
+describe("append_blocks response shape", () => {
+  it("returns {appended, ids} by default (default position, end)", async () => {
+    notionStub.blocks.children.append.mockResolvedValue({
+      results: [
+        { object: "block", id: "blk-1", type: "paragraph", paragraph: { rich_text: [] } },
+        { object: "block", id: "blk-2", type: "paragraph", paragraph: { rich_text: [] } },
+      ],
+    });
+    const res = await dispatch("append_blocks", {
+      block_id: "b-1",
+      children: [
+        { type: "paragraph", paragraph: { rich_text: [] } },
+        { type: "paragraph", paragraph: { rich_text: [] } },
+      ],
+    });
+    expect((res as { ok: boolean }).ok).toBe(true);
+    expect((res as { data: unknown }).data).toEqual({
+      appended: 2,
+      ids: ["blk-1", "blk-2"],
+    });
+  });
+
+  it("slices to the requested count for position:'start' (Notion returns the full child set)", async () => {
+    notionStub.blocks.children.append.mockResolvedValue({
+      results: [
+        { object: "block", id: "blk-new-1", type: "paragraph", paragraph: { rich_text: [] } },
+        { object: "block", id: "blk-old-A", type: "paragraph", paragraph: { rich_text: [] } },
+        { object: "block", id: "blk-old-B", type: "paragraph", paragraph: { rich_text: [] } },
+      ],
+    });
+    const res = await dispatch("append_blocks", {
+      block_id: "b-1",
+      children: [{ type: "paragraph", paragraph: { rich_text: [] } }],
+      position: "start",
+    });
+    expect((res as { data: { ids: string[] } }).data.ids).toEqual(["blk-new-1"]);
+  });
+
+  it("omits ids when the response is unexpectedly short", async () => {
+    notionStub.blocks.children.append.mockResolvedValue({ results: [] });
+    const res = await dispatch("append_blocks", {
+      block_id: "b-1",
+      children: [{ type: "paragraph", paragraph: { rich_text: [] } }],
+    });
+    const data = (res as { data: Record<string, unknown> }).data;
+    expect(data.appended).toBe(1);
+    expect(data).not.toHaveProperty("ids");
+  });
+});
+
 // ────────────────────────────────────────────────────────────────────────
 // 2025-09-03 surface modernization
 // ────────────────────────────────────────────────────────────────────────

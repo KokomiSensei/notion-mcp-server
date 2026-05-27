@@ -101,6 +101,73 @@ describe("slimPage", () => {
     });
   });
 
+  it("flattens rollup array elements (does not return their count)", () => {
+    const page = fx<Parameters<typeof slimPage>[0]>({
+      object: "page",
+      id: "p-rollup",
+      url: "u",
+      parent: { type: "page_id", page_id: "parent" },
+      in_trash: false,
+      icon: null,
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Row" }] },
+        Linked: {
+          type: "rollup",
+          rollup: {
+            type: "array",
+            array: [
+              { type: "number", number: 1 },
+              { type: "number", number: 2 },
+              { type: "select", select: { name: "Open" } },
+            ],
+          },
+        },
+      },
+    });
+    const result = slimPage(page, false, true) as Record<string, unknown>;
+    expect(result.properties).toEqual({ Linked: [1, 2, "Open"] });
+  });
+
+  it("omits unique_id when number is null (no PREFIX-null leak)", () => {
+    const page = fx<Parameters<typeof slimPage>[0]>({
+      object: "page",
+      id: "p-uid",
+      url: "u",
+      parent: { type: "page_id", page_id: "parent" },
+      in_trash: false,
+      icon: null,
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Row" }] },
+        TaskId: {
+          type: "unique_id",
+          unique_id: { prefix: "T", number: null },
+        },
+      },
+    });
+    const result = slimPage(page, false, true) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("properties");
+  });
+
+  it("formats unique_id as PREFIX-N when both prefix and number are present", () => {
+    const page = fx<Parameters<typeof slimPage>[0]>({
+      object: "page",
+      id: "p-uid-2",
+      url: "u",
+      parent: { type: "page_id", page_id: "parent" },
+      in_trash: false,
+      icon: null,
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Row" }] },
+        TaskId: {
+          type: "unique_id",
+          unique_id: { prefix: "T", number: 42 },
+        },
+      },
+    });
+    const result = slimPage(page, false, true) as Record<string, unknown>;
+    expect(result.properties).toEqual({ TaskId: "T-42" });
+  });
+
   it("omits the properties field entirely when all values are empty", () => {
     const page = fx<Parameters<typeof slimPage>[0]>({
       object: "page",

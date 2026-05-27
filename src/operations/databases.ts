@@ -241,9 +241,10 @@ register({
         })
       );
 
-    // query_database results are data source rows (pages). Pass
-    // includeProperties=true so callers see scalar property values without
-    // having to opt into verbose=true (10x larger).
+    // query_database results are data source rows (pages). The SDK response
+    // type also admits data source objects themselves, so dispatch via slimItem
+    // — only the page branch consumes includeProperties=true, which is the
+    // common case and keeps callers off verbose=true (10x larger).
     const slimRow = (item: SearchItemResponse, v?: boolean) => slimItem(item, v ?? false, true);
 
     if (paginate) {

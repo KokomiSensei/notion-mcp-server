@@ -5,13 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-05-27
+
+### Changed
+
+- **Slim shapers trimmed for token efficiency.** Default reads now omit duplicate, default-state, and otherwise noisy fields: pages drop `archived`, `created_time`, `last_edited_time`, and the `in_trash: false` default (only emit when trashed); databases drop the `in_trash: false`, `is_inline: false`, `is_locked: false`, and empty-`description` defaults; blocks omit `has_children: false` and `in_trash: false`; data sources drop empty-`description` defaults. The `count` field is gone from `list_data_sources` (`results.length` is the source of truth). Pass `verbose: true` to get the raw Notion SDK response.
+- **`query_database` now flattens property values by default.** Each row carries a `properties` map of name → primitive (or small object) for `title`, `rich_text`, `number`, `select`, `multi_select`, `status`, `date`, `people`, `files`, `checkbox`, `url`, `email`, `phone_number`, `formula`, `relation`, `rollup`, `created_time`, `last_edited_time`, `created_by`, `last_edited_by`, `unique_id`, `verification`. `verbose: true` keeps the full Notion shape.
+- **`append_blocks` returns `{ appended, ids }` by default**, slimmed from the full block array. Pass `verbose: true` to receive each appended block in slim shape; the same applies to the `append` branch in `batch_mixed_blocks`.
+- **`notion_execute` / `notion_describe` now serialize JSON without indentation** for ~30% smaller wire responses (agents parse JSON either way).
+
+### Fixed
+
+- Rollup `array` rows now flatten each element via the property-value flattener instead of returning the array length (`r.array.length` was emitted as the "value").
+- `unique_id` properties with a missing `number` no longer leak the string `"PREFIX-null"` — the property is omitted from the flattened map instead.
+- `append_blocks` (and `batch_mixed_blocks` `append`) only emits an `ids` field when the SDK response is long enough to cover the requested children; otherwise the field is omitted so callers don't see incorrect IDs.
+
 ## [2.1.0] — 2026-05-26
 
 ### Changed
 
 - Bumped to `@notionhq/client@^5.22.0` and pinned `Notion-Version: 2025-09-03`. Server now talks to the modern Notion API line. Tool surface (`notion_execute`, `notion_describe`) is unchanged for callers.
 - `query_database` now routes through `dataSources.query` under the hood. Single-source databases continue to work transparently when you pass `database_id`. Multi-source databases require `data_source_id` (returns a `multi_source_database` self-healing error pointing to `list_data_sources` if ambiguous).
-- Slim shapers back-fill `archived` ↔ `in_trash` so consumers reading either field continue to work as the wire surface migrates.
 
 ### Added
 
@@ -22,7 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New block types** — `heading_4`, `tab` accepted in structured input; the markdown parser emits `heading_4` for `####`.
 - **New database property types** — `button`, `unique_id`, `verification`. `verification` is writable on pages.
 - **`position` param** on `append_blocks` (preferred over legacy `after`; XOR-refined so callers can't pass both).
-- **`in_trash`** surfaced on slim reads alongside `archived` for forward-compatibility with the 2025-09-03 wire surface.
 
 ## [2.0.0] — 2026-05-26
 

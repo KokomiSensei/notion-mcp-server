@@ -76,7 +76,12 @@ register({
     // Notion returns just the new blocks for default/end/after positions, but
     // the full updated child set for `position: "start"` (new blocks appear
     // first). Slice to the requested count so the response stays bounded.
-    const newBlocks = response.results.slice(0, blocks.length);
+    // If the response is shorter than expected (shouldn't happen, but be safe),
+    // surface only what we got and skip ID emission rather than return wrong IDs.
+    const canMapIds = response.results.length >= blocks.length;
+    const newBlocks = canMapIds
+      ? response.results.slice(0, blocks.length)
+      : response.results;
     if (verbose) {
       return {
         ok: true,
@@ -90,7 +95,7 @@ register({
       ok: true,
       data: {
         appended: blocks.length,
-        ids: newBlocks.map((r) => r.id),
+        ...(canMapIds ? { ids: newBlocks.map((r) => r.id) } : {}),
       },
     };
   }),
@@ -287,11 +292,16 @@ register({
             children: asSdk<AppendBlockChildren>(blocks),
           })
         );
-        const newBlocks = r.results.slice(0, blocks.length);
+        const canMapIds = r.results.length >= blocks.length;
+        const newBlocks = canMapIds ? r.results.slice(0, blocks.length) : r.results;
         results.push(
           verbose
             ? { op: "append", appended: blocks.length, results: newBlocks.map((x) => slimBlock(x, true)) }
-            : { op: "append", appended: blocks.length, ids: newBlocks.map((x) => x.id) }
+            : {
+                op: "append",
+                appended: blocks.length,
+                ...(canMapIds ? { ids: newBlocks.map((x) => x.id) } : {}),
+              }
         );
       } else if (op.op === "update") {
         let body: Record<string, unknown>;

@@ -1,3 +1,45 @@
+# Upgrading from v2.1 → v2.2
+
+v2.2 is a **shape-only** revision of the slim response shapers. Tool surface (`notion_execute`, `notion_describe`) and operation names are unchanged. The goal is to cut token bloat on default reads. Pass `verbose: true` anywhere you depended on the v2.1 raw fields — that gives you the full Notion SDK response.
+
+## What changed
+
+### Slim defaults are tighter
+
+| Op family | Removed by default | Kept |
+| --- | --- | --- |
+| **Pages** (`get_page`, `query_database`, batch reads) | `archived`, `created_time`, `last_edited_time`, `in_trash: false` | `id`, `url`, `title`, `parent`, `icon` (type only), `in_trash: true` (only when trashed) |
+| **Databases** (`get_database`, search) | `in_trash: false`, `is_inline: false`, `is_locked: false`, empty `description` | `id`, `url`, `title`, `description` (only when non-empty), `parent`, `data_sources`, `icon`, the three trash/inline/locked booleans when **true** |
+| **Blocks** (`get_block`, `get_block_children`, …) | `has_children: false`, `in_trash: false`, timestamps | `id`, `type`, `text`, `has_children: true` (only when true), type-specific extras (`checked` for to-do, `language` for code, `image` URL) |
+| **Data sources** (`get_data_source`, `list_data_sources`) | empty `description`, top-level `count` on lists | `id`, `url`, `title`, `parent`, `properties`, `icon` |
+
+### `query_database` now flattens row properties
+
+Previously each row's `properties` was the raw Notion bag (huge nested objects). Now slim rows include a `properties` map of name → primitive (or small object) covering `title`, `rich_text`, `number`, `select`, `multi_select`, `status`, `date`, `people`, `files`, `checkbox`, `url`, `email`, `phone_number`, `formula`, `relation`, `rollup`, `created_time`, `last_edited_time`, `created_by`, `last_edited_by`, `unique_id`, `verification`. Title is already surfaced as the top-level `title` and is omitted from the map.
+
+Empty / `null` values are dropped. If every property is empty, the `properties` field is omitted entirely.
+
+### `append_blocks` returns IDs only
+
+Slim default response is `{ appended, ids }` instead of the full slim block array. Pass `verbose: true` if you need the appended blocks back. The same applies to the `append` branch inside `batch_mixed_blocks`.
+
+### Wire format
+
+`notion_execute` / `notion_describe` now serialize JSON without indentation. Roughly 30% smaller; identical to parse.
+
+### `archived` is no longer back-filled
+
+v2.1 surfaced both `archived` and `in_trash` for forward-compat. v2.2 only emits `in_trash`, and only when it's `true`. If you still read `archived`, switch to `in_trash`, or pass `verbose: true` to get the raw SDK response (which carries `archived`).
+
+## Call sites to audit
+
+- [ ] If you read `archived`, `created_time`, `last_edited_time`, `has_children`, or `is_inline`/`is_locked` from slim responses, either switch to the new names / behavior, or add `verbose: true`.
+- [ ] If you read `query_database` row `properties` expecting the raw Notion bag, switch to the flattened map (or pass `verbose: true`).
+- [ ] If you parse `append_blocks` slim output expecting the full block array, switch to `ids` (or pass `verbose: true`).
+- [ ] If you depend on JSON indentation in tool responses, parse the result — it's still valid JSON.
+
+---
+
 # Upgrading from v2.0 → v2.1
 
 v2.1 is **additive** at the MCP tool layer — the two-tool surface (`notion_execute`, `notion_describe`) is unchanged. The server now talks to `@notionhq/client@5.x` with `Notion-Version: 2025-09-03`, which exposes data sources, new block / property types, and a handful of new endpoints. New operations were added; existing ones still work.
@@ -6,7 +48,7 @@ The only semi-breaking call-site change: `query_database` now routes through `da
 
 ## What's new
 
-1. **API version bump** — server pins `Notion-Version: 2025-09-03`. Slim reads now surface both `archived` and `in_trash` (back-filling whichever the SDK omits) so consumers reading either field continue to work.
+1. **API version bump** — server pins `Notion-Version: 2025-09-03`.
 2. **`query_database` accepts `data_source_id`** — pass either `database_id` (auto-resolves single-source databases) or `data_source_id` (required for multi-source). Multi-source ambiguity returns a `multi_source_database` error envelope with the available source IDs.
 3. **New ops** — `move_page`, `get_page_markdown`, `update_page_markdown`, `list_data_sources`, `get_data_source`, `update_data_source`, `get_comment`, `update_comment`, `delete_comment`.
 4. **New parent types** — `data_source_id`, `workspace`, `block_id` are valid `parent` values on `create_page`.
@@ -18,7 +60,6 @@ The only semi-breaking call-site change: `query_database` now routes through `da
 ## Call sites to audit
 
 - [ ] If you call `query_database` against a database that has multiple data sources, switch to `data_source_id` (use `list_data_sources` to discover them).
-- [ ] If you read `archived` from slim responses, no change needed. For forward-compat, prefer `in_trash`.
 - [ ] If you call `add_page_comment` or `add_discussion_comment` with `text`, no change needed. If you'd rather pass formatted bodies, use the new `markdown` field.
 
 ---
@@ -138,7 +179,7 @@ If you're an LLM hitting a validation error, you can correct and retry without f
 
 ### Response shape
 
-Reads are slimmed by default. `slimPage` drops the raw properties bag and surfaces `{ id, url, title, parent, icon, archived, in_trash, created_time, last_edited_time }`. Pass `verbose: true` (single call) or per item (batch) if you specifically need the full Notion SDK shape.
+Reads are slimmed by default. `slimPage` drops the raw properties bag and surfaces a compact projection (`{ id, url, title, parent, icon, in_trash? }` in current versions — see the v2.1/v2.2 sections above for exact fields). Pass `verbose: true` (single call) or per item (batch) if you specifically need the full Notion SDK shape.
 
 ### Markdown
 

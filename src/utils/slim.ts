@@ -106,7 +106,15 @@ function flattenProperty(
       const r = prop.rollup;
       if (r.type === "number") return r.number ?? undefined;
       if (r.type === "date") return r.date?.start ?? undefined;
-      if (r.type === "array") return r.array.length ? r.array.length : undefined;
+      if (r.type === "array") {
+        if (!r.array.length) return undefined;
+        const flat = r.array
+          .map((item) =>
+            flattenProperty(item as unknown as PageObjectResponse["properties"][string])
+          )
+          .filter((v) => v !== undefined);
+        return flat.length ? flat : undefined;
+      }
       return undefined;
     }
     case "created_time":
@@ -119,7 +127,8 @@ function flattenProperty(
       return prop.last_edited_by.id;
     case "unique_id": {
       const { prefix, number } = prop.unique_id;
-      return prefix ? `${prefix}-${number}` : number ?? undefined;
+      if (number == null) return undefined;
+      return prefix ? `${prefix}-${number}` : number;
     }
     case "verification":
       return prop.verification?.state ?? undefined;
